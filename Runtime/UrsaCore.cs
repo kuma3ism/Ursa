@@ -57,9 +57,9 @@ namespace Ursa
         bool IsTopScene(UnityEngine.SceneManagement.Scene scene);
 
         /// <summary>
-        /// シーンをロードし、対象のコンポーネントインスタンスを生成・取得します（履歴にはまだ追加されません）。
+        /// シーンのロードや事前準備を管理するためのハンドル（SceneHandle）を同期的に生成して返します。
         /// </summary>
-        Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour;
+        Ursa.Scenes.SceneHandle<TScene> CreateScene<TScene>() where TScene : MonoBehaviour;
 
         /// <summary>
         /// 既にロード済みのシーンのインスタンスを、現在のシーンの上に重ねて履歴に追加します。

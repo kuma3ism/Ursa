@@ -236,42 +236,13 @@ namespace Ursa.Scenes
         }
 
         /// <summary>
-        /// 指定したシーンをロード（Additive）し、対象となるTSceneコンポーネントのインスタンスを検索して返します。
+        /// シーンのロードや事前準備を管理するためのハンドル（SceneHandle）を同期的に生成して返します。
         /// ロードされた時点では履歴スタックへの追加はまだ行われません。
         /// </summary>
-        public async Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour
+        public SceneHandle<TScene> CreateScene<TScene>() where TScene : MonoBehaviour
         {
-            if (_isTransitioning)
-            {
-                Debug.LogWarning("[Ursa] 遷移中のため、CreateSceneAsync 要求を無視しました。");
-                return null;
-            }
             string sceneName = typeof(TScene).Name;
-            _isTransitioning = true;
-            try
-            {
-                Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
-                Scene newlyLoadedScene = await _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-
-                if (!newlyLoadedScene.IsValid())
-                {
-                    Debug.LogWarning($"[Ursa] {sceneName} シーンのロードに失敗しました。");
-                    return null;
-                }
-
-                foreach (var go in newlyLoadedScene.GetRootGameObjects())
-                {
-                    var comp = go.GetComponentInChildren<TScene>(true);
-                    if (comp != null) return comp;
-                }
-
-                Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
-                return null;
-            }
-            finally
-            {
-                _isTransitioning = false;
-            }
+            return new SceneHandle<TScene>(sceneName, _sceneLoader);
         }
 
         /// <summary>
@@ -330,11 +301,13 @@ namespace Ursa.Scenes
             where TScene : SceneBase<TParam, TResult>
             where TParam : ISceneParameter
         {
-            var sceneInstance = await CreateSceneAsync<TScene>();
-            if (sceneInstance == null) return default;
-
+            var handle = CreateScene<TScene>();
+            
             // 内部で自動的にPreload（事前DL等）を実行する
-            await sceneInstance.PreloadAsync();
+            await handle.PreloadAsync();
+            
+            var sceneInstance = await handle.GetSceneAsync();
+            if (sceneInstance == null) return default;
 
             await sceneInstance.OpenAsync(parameter);
             return await sceneInstance.CloseResultAsync();
