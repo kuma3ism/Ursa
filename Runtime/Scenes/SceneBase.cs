@@ -3,47 +3,67 @@ using UnityEngine;
 
 namespace Ursa.Scenes
 {
-    // A: 戻り値を持たない通常のシーンベース
+    /// <summary>
+    /// 戻り値を持たない、標準的なシーンのベースクラス。
+    /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
+    /// </summary>
     public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T> where T : ISceneParameter
     {
         protected T Parameter { get; private set; }
 
         protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
 
-        // 既存との互換性のためのOnEnterScene
+        /// <summary>
+        /// シーンがロードされた直後に呼ばれる初期化処理。
+        /// 既存のインターフェースとの互換性のために実装されており、パラメーターの受け取りを行います。
+        /// </summary>
         public virtual async Task OnEnterScene(T parameter)
         {
             this.Parameter = parameter;
             await Task.CompletedTask;
         }
 
-        // 新機能: Load済みのインスタンスを自ら履歴(Push)に乗せて初期化する
+        /// <summary>
+        /// すでにロード済みのこのシーンインスタンスを履歴（スタック）の最前面にPushし、
+        /// パラメーターを渡して初期化処理を開始します。
+        /// </summary>
         public virtual async Task OpenAsync(T parameter)
         {
             await UrsaCore.Scene.PushInstanceAsync(this.gameObject.scene);
             await OnEnterScene(parameter);
         }
 
-        // 新機能: Load済みのインスタンスを自ら現在の最前面と入れ替え(Replace)て初期化する
+        /// <summary>
+        /// すでにロード済みのこのシーンインスタンスを現在の最前面のシーンと入れ替え（Replace）し、
+        /// パラメーターを渡して初期化処理を開始します。
+        /// </summary>
         public virtual async Task ReplaceAsync(T parameter)
         {
             await UrsaCore.Scene.ReplaceInstanceAsync(this.gameObject.scene);
             await OnEnterScene(parameter);
         }
 
-        // 新機能: 自分自身を閉じる (PopAsyncのエイリアス)
+        /// <summary>
+        /// 現在最前面にある自分自身のシーンを破棄し、一つ前のシーンに戻ります。
+        /// </summary>
         public virtual async Task CloseAsync()
         {
             await UrsaCore.Scene.PopAsync();
         }
 
+        /// <summary>
+        /// 前面に重なっていた別のシーンが閉じられ、再びこのシーンが最前面（アクティブ）になった際に呼ばれます。
+        /// </summary>
         public virtual void OnBackToScene()
         {
             // 子供が消えて自分が最前面になった時に呼ばれる
         }
     }
 
-    // B: 呼び出し元に結果を返すシーンベース
+    /// <summary>
+    /// ユーザーの選択結果や処理データなど、呼び出し元に戻り値（結果）を返すシーンのベースクラス。
+    /// ポップアップダイアログや、確認画面などで使用します。
+    /// </summary>
     public abstract class SceneBase<TParam, TResult> : SceneBase<TParam>
         where TParam : ISceneParameter
     {
@@ -61,7 +81,10 @@ namespace Ursa.Scenes
             await base.ReplaceAsync(parameter);
         }
 
-        // 閉じる際に結果をセットして返す
+        /// <summary>
+        /// 呼び出し元へ戻り値をセットし、自分自身を閉じて一つ前のシーンに戻ります。
+        /// （シーン自身が「自身を閉じる」アクションとして呼び出します）
+        /// </summary>
         public async Task<TResult> CloseResultAsync(TResult result)
         {
             await UrsaCore.Scene.PopAsync();
@@ -69,7 +92,10 @@ namespace Ursa.Scenes
             return result;
         }
 
-        // 呼び出し元が待機するための Task<TResult> を返す
+        /// <summary>
+        /// このシーンが閉じられ、結果が返ってくるまで待機します。
+        /// （呼び出し元のシーンが「結果を待つ」アクションとして呼び出します）
+        /// </summary>
         public new Task<TResult> CloseResultAsync()
         {
             return _tcs?.Task ?? Task.FromResult(default(TResult));

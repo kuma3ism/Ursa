@@ -8,6 +8,10 @@ using Ursa;
 
 namespace Ursa.Scenes
 {
+    /// <summary>
+    /// Ursaフレームワークにおける、シーンのロード・アンロードおよび履歴（スタック）管理を行う実体クラス。
+    /// ISceneManagerの実装であり、シングルトンとして管理されることが想定されています。
+    /// </summary>
     public class UrsaSceneManager : ISceneManager
     {
         private bool _isTransitioning;
@@ -218,8 +222,10 @@ namespace Ursa.Scenes
             return false;
         }
 
-        // --- 新規追加: インスタンスベース機能 ---
-
+        /// <summary>
+        /// 指定したシーンをロード（Additive）し、対象となるTSceneコンポーネントのインスタンスを検索して返します。
+        /// ロードされた時点では履歴スタックへの追加はまだ行われません。
+        /// </summary>
         public async Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour
         {
             string sceneName = typeof(TScene).Name;
@@ -249,6 +255,9 @@ namespace Ursa.Scenes
             }
         }
 
+        /// <summary>
+        /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
+        /// </summary>
         public async Task PushInstanceAsync(Scene scene)
         {
             if (_history.Count == 0) RegisterInitialScene();
@@ -259,6 +268,9 @@ namespace Ursa.Scenes
             await Task.CompletedTask;
         }
 
+        /// <summary>
+        /// 既にロード済みのシーンインスタンスを、現在の最前面のシーンと入れ替え（Replace）て履歴を更新します。
+        /// </summary>
         public async Task ReplaceInstanceAsync(Scene scene)
         {
             _isTransitioning = true;
@@ -289,6 +301,10 @@ namespace Ursa.Scenes
             }
         }
 
+        /// <summary>
+        /// 対象のシーンをロードし、パラメーターを渡して開いた上で、
+        /// そのシーンが閉じられて結果が返ってくるまで待機して値を返します。
+        /// </summary>
         public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter) 
             where TScene : SceneBase<TParam, TResult> 
             where TParam : ISceneParameter
