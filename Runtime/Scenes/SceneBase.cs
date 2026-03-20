@@ -7,11 +7,20 @@ namespace Ursa.Scenes
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T> where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, IScenePreloader where T : ISceneParameter
     {
         protected T Parameter { get; private set; }
 
         protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
+
+        /// <summary>
+        /// シーンが開く前（OpenAsync等の直前）に呼ばれる事前ロード処理。
+        /// Addressablesなどの重いアセットのダウンロード等に利用します。
+        /// </summary>
+        public virtual async Task PreloadAsync()
+        {
+            await Task.CompletedTask;
+        }
 
         /// <summary>
         /// シーンがロードされた直後に呼ばれる初期化処理。

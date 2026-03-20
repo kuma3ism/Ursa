@@ -16,6 +16,12 @@ namespace Ursa.Scenes
     {
         private bool _isTransitioning;
         private Stack<Scene> _history = new Stack<Scene>();
+        private readonly ISceneLoader _sceneLoader;
+
+        public UrsaSceneManager(ISceneLoader sceneLoader = null)
+        {
+            _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
+        }
 
         /// <summary>
         /// 全履歴を捨てて、新しいシーンへ遷移 (Single)
@@ -70,22 +76,21 @@ namespace Ursa.Scenes
                     if (oldScene.IsValid() && oldScene.isLoaded)
                     {
                         Debug.Log($"<color=orange>[Ursa]</color> Replacing: {oldScene.name}");
-                        var unloadOp = SceneManager.UnloadSceneAsync(oldScene);
-                        if (unloadOp != null)
-                        {
-                            while (!unloadOp.isDone) await Task.Yield();
-                        }
+                        await _sceneLoader.UnloadSceneAsync(oldScene);
                     }
                 }
 
                 // 2. 新しいシーンをロードする
                 string sceneName = typeof(TScene).Name;
-                var loadOp = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-                while (!loadOp.isDone) await Task.Yield();
+                Scene newlyLoadedScene = await _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
 
                 // 3. 新しいシーンを登録する
-                Scene newlyLoadedScene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
-                _history.Push(newlyLoadedScene); // 新しいシーンを積む
+                if (newlyLoadedScene.IsValid())
+                {
+                    _history.Push(newlyLoadedScene); // 新しいシーンを積む
+                }
+
+                await ExecutePreloadAsync(newlyLoadedScene);
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
             }
@@ -113,11 +118,7 @@ namespace Ursa.Scenes
                 if (scene.IsValid() && scene.isLoaded)
                 {
                     Debug.Log($"<color=cyan>[Ursa]</color> Pop: {scene.name}");
-                    var op = SceneManager.UnloadSceneAsync(scene);
-                    if (op != null)
-                    {
-                        while (!op.isDone) await Task.Yield();
-                    }
+                    await _sceneLoader.UnloadSceneAsync(scene);
                 }
 
                 NotifyBackToScene();
@@ -134,13 +135,12 @@ namespace Ursa.Scenes
             try
             {
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading: {sceneName} ({mode})");
-                var op = SceneManager.LoadSceneAsync(sceneName, mode);
-                if (op == null) return;
+                Scene newlyLoadedScene = await _sceneLoader.LoadSceneAsync(sceneName, mode);
+                if (!newlyLoadedScene.IsValid()) return;
 
-                while (!op.isDone) await Task.Yield();
-
-                Scene newlyLoadedScene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
                 _history.Push(newlyLoadedScene);
+
+                await ExecutePreloadAsync(newlyLoadedScene);
 
                 if (parameter != null)
                 {
@@ -153,15 +153,29 @@ namespace Ursa.Scenes
             }
         }
 
+        private async Task ExecutePreloadAsync(Scene targetScene)
+        {
+            if (!targetScene.IsValid()) return;
+            var rootObjects = targetScene.GetRootGameObjects();
+            foreach (var go in rootObjects)
+            {
+                var preloaders = go.GetComponentsInChildren<IScenePreloader>(true);
+                foreach (var preloader in preloaders)
+                {
+                    await preloader.PreloadAsync();
+                }
+            }
+        }
+
         private void RegisterInitialScene()
         {
             // すでに履歴があるなら何もしない
             if (_history.Count > 0) return;
 
             Scene active = SceneManager.GetActiveScene();
-            
+
             _history.Push(active);
-            
+
             Debug.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
 
@@ -174,7 +188,7 @@ namespace Ursa.Scenes
                 foreach (var mono in receivers)
                 {
                     var interfaces = mono.GetType().GetInterfaces();
-                    var receiverInterface = interfaces.FirstOrDefault(i => 
+                    var receiverInterface = interfaces.FirstOrDefault(i =>
                         i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISceneReceiver<>));
 
                     if (receiverInterface != null)
@@ -237,19 +251,20 @@ namespace Ursa.Scenes
             try
             {
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
-                var op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-                if (op != null)
+                Scene newlyLoadedScene = await _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+
+                if (!newlyLoadedScene.IsValid())
                 {
-                    while (!op.isDone) await Task.Yield();
+                    Debug.LogWarning($"[Ursa] {sceneName} シーンのロードに失敗しました。");
+                    return null;
                 }
-                
-                Scene newlyLoadedScene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
+
                 foreach (var go in newlyLoadedScene.GetRootGameObjects())
                 {
                     var comp = go.GetComponentInChildren<TScene>(true);
                     if (comp != null) return comp;
                 }
-                
+
                 Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
                 return null;
             }
@@ -295,11 +310,7 @@ namespace Ursa.Scenes
                     if (oldScene.IsValid() && oldScene.isLoaded)
                     {
                         Debug.Log($"<color=orange>[Ursa]</color> Replacing Instance: {oldScene.name}");
-                        var unloadOp = SceneManager.UnloadSceneAsync(oldScene);
-                        if (unloadOp != null)
-                        {
-                            while (!unloadOp.isDone) await Task.Yield();
-                        }
+                        await _sceneLoader.UnloadSceneAsync(oldScene);
                     }
                 }
 
@@ -315,13 +326,16 @@ namespace Ursa.Scenes
         /// 対象のシーンをロードし、パラメーターを渡して開いた上で、
         /// そのシーンが閉じられて結果が返ってくるまで待機して値を返します。
         /// </summary>
-        public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter) 
-            where TScene : SceneBase<TParam, TResult> 
+        public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter)
+            where TScene : SceneBase<TParam, TResult>
             where TParam : ISceneParameter
         {
             var sceneInstance = await CreateSceneAsync<TScene>();
             if (sceneInstance == null) return default;
-            
+
+            // 内部で自動的にPreload（事前DL等）を実行する
+            await sceneInstance.PreloadAsync();
+
             await sceneInstance.OpenAsync(parameter);
             return await sceneInstance.CloseResultAsync();
         }
