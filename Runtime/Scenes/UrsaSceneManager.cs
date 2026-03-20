@@ -15,18 +15,20 @@ namespace Ursa.Scenes
     public class UrsaSceneManager : ISceneManager
     {
         private bool _isTransitioning;
-        private Dictionary<string, Scene> _loadedScenes = new Dictionary<string, Scene>();
-        private Stack<string> _history = new Stack<string>();
+        private Stack<Scene> _history = new Stack<Scene>();
 
         /// <summary>
         /// 全履歴を捨てて、新しいシーンへ遷移 (Single)
         /// </summary>
         public async Task ResetAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
         {
-            if (_isTransitioning) return;
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、ResetAsync 要求を無視しました。");
+                return;
+            }
 
             _history.Clear();
-            _loadedScenes.Clear();
 
             await InternalLoad(typeof(TScene).Name, parameter, LoadSceneMode.Single);
         }
@@ -36,7 +38,11 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task PushAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
         {
-            if (_isTransitioning) return;
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、PushAsync 要求を無視しました。");
+                return;
+            }
 
             if (_history.Count == 0) RegisterInitialScene();
 
@@ -48,16 +54,20 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task ReplaceAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
         {
-            if (_isTransitioning) return;
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、ReplaceAsync 要求を無視しました。");
+                return;
+            }
             _isTransitioning = true; // 遷移開始
 
             try
             {
                 // 1. 今の一番上を取り出す
-                if (_history.Count > 1)
+                if (_history.Count > 0)
                 {
-                    string currentKey = _history.Pop(); // スタックから抜く
-                    if (_loadedScenes.TryGetValue(currentKey, out Scene oldScene))
+                    Scene oldScene = _history.Pop(); // スタックから抜く
+                    if (oldScene.IsValid() && oldScene.isLoaded)
                     {
                         Debug.Log($"<color=orange>[Ursa]</color> Replacing: {oldScene.name}");
                         var unloadOp = SceneManager.UnloadSceneAsync(oldScene);
@@ -65,7 +75,6 @@ namespace Ursa.Scenes
                         {
                             while (!unloadOp.isDone) await Task.Yield();
                         }
-                        _loadedScenes.Remove(currentKey);
                     }
                 }
 
@@ -76,10 +85,7 @@ namespace Ursa.Scenes
 
                 // 3. 新しいシーンを登録する
                 Scene newlyLoadedScene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
-                string newGuid = Guid.NewGuid().ToString().Substring(0, 8);
-                
-                _loadedScenes.Add(newGuid, newlyLoadedScene);
-                _history.Push(newGuid); // 新しいキーを積む
+                _history.Push(newlyLoadedScene); // 新しいシーンを積む
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
             }
@@ -96,15 +102,15 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning || _history.Count <= 1)
             {
-                Debug.LogWarning("[Ursa] 戻る先のシーンがありません。");
+                Debug.LogWarning("[Ursa] 戻る先のシーンがない、もしくは遷移中です。");
                 return;
             }
 
             _isTransitioning = true;
             try
             {
-                string currentKey = _history.Pop();
-                if (_loadedScenes.TryGetValue(currentKey, out Scene scene))
+                Scene scene = _history.Pop();
+                if (scene.IsValid() && scene.isLoaded)
                 {
                     Debug.Log($"<color=cyan>[Ursa]</color> Pop: {scene.name}");
                     var op = SceneManager.UnloadSceneAsync(scene);
@@ -112,7 +118,6 @@ namespace Ursa.Scenes
                     {
                         while (!op.isDone) await Task.Yield();
                     }
-                    _loadedScenes.Remove(currentKey);
                 }
 
                 NotifyBackToScene();
@@ -135,10 +140,7 @@ namespace Ursa.Scenes
                 while (!op.isDone) await Task.Yield();
 
                 Scene newlyLoadedScene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
-                string guid = Guid.NewGuid().ToString().Substring(0, 8);
-                
-                _loadedScenes.Add(guid, newlyLoadedScene);
-                _history.Push(guid);
+                _history.Push(newlyLoadedScene);
 
                 if (parameter != null)
                 {
@@ -157,11 +159,8 @@ namespace Ursa.Scenes
             if (_history.Count > 0) return;
 
             Scene active = SceneManager.GetActiveScene();
-            // 固定のキーで登録
-            string rootKey = "ROOT";
             
-            _loadedScenes.Add(rootKey, active);
-            _history.Push(rootKey);
+            _history.Push(active);
             
             Debug.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
@@ -195,8 +194,8 @@ namespace Ursa.Scenes
         {
             if (_history.Count == 0) return;
 
-            string topKey = _history.Peek();
-            if (_loadedScenes.TryGetValue(topKey, out Scene activeScene))
+            Scene activeScene = _history.Peek();
+            if (activeScene.IsValid() && activeScene.isLoaded)
             {
                 foreach (var go in activeScene.GetRootGameObjects())
                 {
@@ -214,9 +213,9 @@ namespace Ursa.Scenes
             // 履歴が空なら、今いるシーンを登録しちゃう
             if (_history.Count == 0) RegisterInitialScene();
 
-            string topKey = _history.Peek();
-            if (_loadedScenes.TryGetValue(topKey, out Scene topScene))
+            if (_history.Count > 0)
             {
+                Scene topScene = _history.Peek();
                 return topScene.handle == scene.handle;
             }
             return false;
@@ -228,6 +227,11 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour
         {
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、CreateSceneAsync 要求を無視しました。");
+                return null;
+            }
             string sceneName = typeof(TScene).Name;
             _isTransitioning = true;
             try
@@ -260,11 +264,15 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task PushInstanceAsync(Scene scene)
         {
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、PushInstanceAsync 要求を無視しました。");
+                return;
+            }
+
             if (_history.Count == 0) RegisterInitialScene();
 
-            string guid = Guid.NewGuid().ToString().Substring(0, 8);
-            _loadedScenes.Add(guid, scene);
-            _history.Push(guid);
+            _history.Push(scene);
             await Task.CompletedTask;
         }
 
@@ -273,13 +281,18 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task ReplaceInstanceAsync(Scene scene)
         {
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、ReplaceInstanceAsync 要求を無視しました。");
+                return;
+            }
             _isTransitioning = true;
             try
             {
                 if (_history.Count > 0)
                 {
-                    string currentKey = _history.Pop();
-                    if (_loadedScenes.TryGetValue(currentKey, out Scene oldScene))
+                    Scene oldScene = _history.Pop();
+                    if (oldScene.IsValid() && oldScene.isLoaded)
                     {
                         Debug.Log($"<color=orange>[Ursa]</color> Replacing Instance: {oldScene.name}");
                         var unloadOp = SceneManager.UnloadSceneAsync(oldScene);
@@ -287,13 +300,10 @@ namespace Ursa.Scenes
                         {
                             while (!unloadOp.isDone) await Task.Yield();
                         }
-                        _loadedScenes.Remove(currentKey);
                     }
                 }
 
-                string newGuid = Guid.NewGuid().ToString().Substring(0, 8);
-                _loadedScenes.Add(newGuid, scene);
-                _history.Push(newGuid);
+                _history.Push(scene);
             }
             finally
             {
