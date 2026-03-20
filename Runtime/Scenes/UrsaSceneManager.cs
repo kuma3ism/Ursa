@@ -82,15 +82,17 @@ namespace Ursa.Scenes
 
                 // 2. 新しいシーンをロードする
                 string sceneName = typeof(TScene).Name;
-                Scene newlyLoadedScene = await _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+                Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync() ?? Task.CompletedTask;
+
+                await Task.WhenAll(sceneLoadTask, resourceLoadTask);
+                Scene newlyLoadedScene = await sceneLoadTask;
 
                 // 3. 新しいシーンを登録する
                 if (newlyLoadedScene.IsValid())
                 {
                     _history.Push(newlyLoadedScene); // 新しいシーンを積む
                 }
-
-                await ExecutePreloadAsync(newlyLoadedScene);
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
             }
@@ -135,12 +137,16 @@ namespace Ursa.Scenes
             try
             {
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading: {sceneName} ({mode})");
-                Scene newlyLoadedScene = await _sceneLoader.LoadSceneAsync(sceneName, mode);
+                
+                Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, mode);
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync() ?? Task.CompletedTask;
+
+                await Task.WhenAll(sceneLoadTask, resourceLoadTask);
+                Scene newlyLoadedScene = await sceneLoadTask;
+                
                 if (!newlyLoadedScene.IsValid()) return;
 
                 _history.Push(newlyLoadedScene);
-
-                await ExecutePreloadAsync(newlyLoadedScene);
 
                 if (parameter != null)
                 {
@@ -153,19 +159,6 @@ namespace Ursa.Scenes
             }
         }
 
-        private async Task ExecutePreloadAsync(Scene targetScene)
-        {
-            if (!targetScene.IsValid()) return;
-            var rootObjects = targetScene.GetRootGameObjects();
-            foreach (var go in rootObjects)
-            {
-                var preloaders = go.GetComponentsInChildren<IScenePreloader>(true);
-                foreach (var preloader in preloaders)
-                {
-                    await preloader.PreloadAsync();
-                }
-            }
-        }
 
         private void RegisterInitialScene()
         {
@@ -236,13 +229,47 @@ namespace Ursa.Scenes
         }
 
         /// <summary>
-        /// シーンのロードや事前準備を管理するためのハンドル（SceneHandle）を同期的に生成して返します。
+        /// 指定したシーンをロード（Additive）し、対象となるTSceneコンポーネントのインスタンスを検索して返します。
         /// ロードされた時点では履歴スタックへの追加はまだ行われません。
         /// </summary>
-        public SceneHandle<TScene> CreateScene<TScene>() where TScene : MonoBehaviour
+        public async Task<TScene> CreateSceneAsync<TScene>(ISceneParameter parameter = null) where TScene : MonoBehaviour
         {
+            if (_isTransitioning)
+            {
+                Debug.LogWarning("[Ursa] 遷移中のため、CreateSceneAsync 要求を無視しました。");
+                return null;
+            }
             string sceneName = typeof(TScene).Name;
-            return new SceneHandle<TScene>(sceneName, _sceneLoader);
+            _isTransitioning = true;
+            try
+            {
+                Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
+                
+                Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync() ?? Task.CompletedTask;
+
+                await Task.WhenAll(sceneLoadTask, resourceLoadTask);
+                Scene newlyLoadedScene = await sceneLoadTask;
+
+                if (!newlyLoadedScene.IsValid())
+                {
+                    Debug.LogWarning($"[Ursa] {sceneName} シーンのロードに失敗しました。");
+                    return null;
+                }
+
+                foreach (var go in newlyLoadedScene.GetRootGameObjects())
+                {
+                    var comp = go.GetComponentInChildren<TScene>(true);
+                    if (comp != null) return comp;
+                }
+
+                Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
+                return null;
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
         }
 
         /// <summary>
@@ -301,12 +328,7 @@ namespace Ursa.Scenes
             where TScene : SceneBase<TParam, TResult>
             where TParam : ISceneParameter
         {
-            var handle = CreateScene<TScene>();
-            
-            // 内部で自動的にPreload（事前DL等）を実行する
-            await handle.PreloadAsync();
-            
-            var sceneInstance = await handle.GetSceneAsync();
+            var sceneInstance = await CreateSceneAsync<TScene>(parameter);
             if (sceneInstance == null) return default;
 
             await sceneInstance.OpenAsync(parameter);

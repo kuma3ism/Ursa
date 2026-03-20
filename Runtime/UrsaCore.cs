@@ -26,66 +26,24 @@ namespace Ursa
         public static void Dispose() => Scene = null;
     }
 
+
+
     /// <summary>
-    /// シーンのロードや履歴（スタック）管理を扱うマネージャーのインターフェース
+    /// シーン遷移時に渡すパラメーターのうち、シーンのロードと同時並行でアセット等の事前DLを行いたい場合に追加実装するインターフェース
     /// </summary>
-    public interface ISceneManager
+    public interface ISceneResourcePreloader
     {
-        /// <summary>
-        /// 全ての履歴を破棄し、指定したシーンを新しいルートとしてロードします。
-        /// </summary>
-        Task ResetAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
-
-        /// <summary>
-        /// 現在のシーンの上に、指定したシーンを新しく重ねて（Additive）履歴に追加します。
-        /// </summary>
-        Task PushAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
-
-        /// <summary>
-        /// 履歴スタックの一番上にある最前面のシーンを破棄し、一つ前のシーンに戻ります。
-        /// </summary>
-        Task PopAsync();
-
-        /// <summary>
-        /// 現在の最前面のシーンを破棄し、同じ階層に新しいシーンをロードして履歴を入れ替えます。
-        /// </summary>
-        Task ReplaceAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
-
-        /// <summary>
-        /// 指定したシーンの実体が、現在履歴スタックの最前面（トップ）にいるかどうかを判定します。
-        /// </summary>
-        bool IsTopScene(UnityEngine.SceneManagement.Scene scene);
-
-        /// <summary>
-        /// シーンのロードや事前準備を管理するためのハンドル（SceneHandle）を同期的に生成して返します。
-        /// </summary>
-        Ursa.Scenes.SceneHandle<TScene> CreateScene<TScene>() where TScene : MonoBehaviour;
-
-        /// <summary>
-        /// 既にロード済みのシーンのインスタンスを、現在のシーンの上に重ねて履歴に追加します。
-        /// </summary>
-        Task PushInstanceAsync(UnityEngine.SceneManagement.Scene scene);
-
-        /// <summary>
-        /// 既にロード済みのシーンのインスタンスを、現在の最前面のシーンと入れ替えて履歴を更新します。
-        /// </summary>
-        Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene);
-
-        /// <summary>
-        /// 戻り値を持つシーンをロードし、そのポップアップ等が終了して結果が返ってくるまで待機します。
-        /// </summary>
-        Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter)
-            where TScene : Ursa.Scenes.SceneBase<TParam, TResult>
-            where TParam : ISceneParameter;
+        System.Threading.Tasks.Task PreloadResourcesAsync();
     }
 
     /// <summary>
-    /// シーンに必要なアセットや初期化処理を、シーン表示直前に事前実行するためのインターフェース
+    /// シーン終了時（OnDestroy）に、パラメータに紐づくアセットやリソースの解放（Release）を自動実行するためのインターフェース
     /// </summary>
-    public interface IScenePreloader
+    public interface ISceneResourceUnloader
     {
-        System.Threading.Tasks.Task PreloadAsync();
+        void UnloadResources();
     }
+
 
     /// <summary>
     /// シーン遷移時にパラメーターを受け取り、初期化処理を行うためのインターフェース
