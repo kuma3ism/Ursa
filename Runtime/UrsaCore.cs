@@ -20,7 +20,7 @@ namespace Ursa
 
     public interface ISceneManager
     {
-        Task TransitionAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
+        Task ResetAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
         Task PushAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
         Task PopAsync();
         

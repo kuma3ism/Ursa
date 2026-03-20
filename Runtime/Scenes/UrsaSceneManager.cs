@@ -17,7 +17,7 @@ namespace Ursa.Scenes
         /// <summary>
         /// 全履歴を捨てて、新しいシーンへ遷移 (Single)
         /// </summary>
-        public async Task TransitionAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
+        public async Task ResetAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
         {
             if (_isTransitioning) return;
 
