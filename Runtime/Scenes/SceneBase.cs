@@ -8,7 +8,7 @@ namespace Ursa.Scenes
     {
         protected T Parameter { get; private set; }
 
-        protected bool IsActive => UrsaCore.Scene.IsActive(this.gameObject.scene);
+        protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
 
         // 既存との互換性のためのOnEnterScene
         public virtual async Task OnEnterScene(T parameter)
@@ -18,7 +18,7 @@ namespace Ursa.Scenes
         }
 
         // 新機能: Load済みのインスタンスを自ら履歴(Push)に乗せて初期化する
-        public virtual async Task Open(T parameter)
+        public virtual async Task OpenAsync(T parameter)
         {
             await UrsaCore.Scene.PushInstanceAsync(this.gameObject.scene);
             await OnEnterScene(parameter);
@@ -44,15 +44,15 @@ namespace Ursa.Scenes
     }
 
     // B: 呼び出し元に結果を返すシーンベース
-    public abstract class SceneBase<TParam, TResult> : SceneBase<TParam> 
+    public abstract class SceneBase<TParam, TResult> : SceneBase<TParam>
         where TParam : ISceneParameter
     {
         private TaskCompletionSource<TResult> _tcs;
 
-        public override async Task Open(TParam parameter)
+        public override async Task OpenAsync(TParam parameter)
         {
             _tcs = new TaskCompletionSource<TResult>();
-            await base.Open(parameter);
+            await base.OpenAsync(parameter);
         }
 
         public override async Task ReplaceAsync(TParam parameter)
@@ -62,7 +62,7 @@ namespace Ursa.Scenes
         }
 
         // 閉じる際に結果をセットして返す
-        public async Task<TResult> CloseAsync(TResult result)
+        public async Task<TResult> CloseResultAsync(TResult result)
         {
             await UrsaCore.Scene.PopAsync();
             _tcs?.TrySetResult(result);
@@ -70,7 +70,7 @@ namespace Ursa.Scenes
         }
 
         // 呼び出し元が待機するための Task<TResult> を返す
-        public new Task<TResult> CloseAsync()
+        public new Task<TResult> CloseResultAsync()
         {
             return _tcs?.Task ?? Task.FromResult(default(TResult));
         }

@@ -27,7 +27,7 @@ namespace Ursa
         // 追加：現在の最前面シーンを破棄して、新しいシーンをロードする
         Task ReplaceAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
         // 指定したキーが最前面なら true を返す
-        bool IsActive(UnityEngine.SceneManagement.Scene scene);
+        bool IsTopScene(UnityEngine.SceneManagement.Scene scene);
 
         // --- 新規追加: インスタンスベース機能 ---
         Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour;

@@ -205,7 +205,7 @@ namespace Ursa.Scenes
             }
         }
 
-        public bool IsActive(Scene scene)
+        public bool IsTopScene(Scene scene)
         {
             // 履歴が空なら、今いるシーンを登録しちゃう
             if (_history.Count == 0) RegisterInitialScene();
@@ -296,8 +296,8 @@ namespace Ursa.Scenes
             var sceneInstance = await CreateSceneAsync<TScene>();
             if (sceneInstance == null) return default;
             
-            await sceneInstance.Open(parameter);
-            return await sceneInstance.CloseAsync();
+            await sceneInstance.OpenAsync(parameter);
+            return await sceneInstance.CloseResultAsync();
         }
 
     }
