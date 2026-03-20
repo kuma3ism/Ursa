@@ -1,0 +1,11 @@
+{
+  "name": "com.heita.ursa",
+  "version": "0.1.0",
+  "displayName": "Ursa Framework",
+  "description": "Lightweight, dependency-free core framework for Unity 6.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Heita"
+  }
+}
+
