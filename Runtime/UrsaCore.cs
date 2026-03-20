@@ -28,6 +28,15 @@ namespace Ursa
         Task ReplaceAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
         // 指定したキーが最前面なら true を返す
         bool IsActive(UnityEngine.SceneManagement.Scene scene);
+
+        // --- 新規追加: インスタンスベース機能 ---
+        Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour;
+        Task PushInstanceAsync(UnityEngine.SceneManagement.Scene scene);
+        Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene);
+        
+        Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter) 
+            where TScene : Ursa.Scenes.SceneBase<TParam, TResult> 
+            where TParam : ISceneParameter;
     }
 
     public interface ISceneReceiver<T> where T : ISceneParameter 

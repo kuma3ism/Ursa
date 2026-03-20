@@ -218,5 +218,87 @@ namespace Ursa.Scenes
             return false;
         }
 
+        // --- 新規追加: インスタンスベース機能 ---
+
+        public async Task<TScene> CreateSceneAsync<TScene>() where TScene : MonoBehaviour
+        {
+            string sceneName = typeof(TScene).Name;
+            _isTransitioning = true;
+            try
+            {
+                Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
+                var op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+                if (op != null)
+                {
+                    while (!op.isDone) await Task.Yield();
+                }
+                
+                Scene newlyLoadedScene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
+                foreach (var go in newlyLoadedScene.GetRootGameObjects())
+                {
+                    var comp = go.GetComponentInChildren<TScene>(true);
+                    if (comp != null) return comp;
+                }
+                
+                Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
+                return null;
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
+        }
+
+        public async Task PushInstanceAsync(Scene scene)
+        {
+            if (_history.Count == 0) RegisterInitialScene();
+
+            string guid = Guid.NewGuid().ToString().Substring(0, 8);
+            _loadedScenes.Add(guid, scene);
+            _history.Push(guid);
+            await Task.CompletedTask;
+        }
+
+        public async Task ReplaceInstanceAsync(Scene scene)
+        {
+            _isTransitioning = true;
+            try
+            {
+                if (_history.Count > 0)
+                {
+                    string currentKey = _history.Pop();
+                    if (_loadedScenes.TryGetValue(currentKey, out Scene oldScene))
+                    {
+                        Debug.Log($"<color=orange>[Ursa]</color> Replacing Instance: {oldScene.name}");
+                        var unloadOp = SceneManager.UnloadSceneAsync(oldScene);
+                        if (unloadOp != null)
+                        {
+                            while (!unloadOp.isDone) await Task.Yield();
+                        }
+                        _loadedScenes.Remove(currentKey);
+                    }
+                }
+
+                string newGuid = Guid.NewGuid().ToString().Substring(0, 8);
+                _loadedScenes.Add(newGuid, scene);
+                _history.Push(newGuid);
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
+        }
+
+        public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter) 
+            where TScene : SceneBase<TParam, TResult> 
+            where TParam : ISceneParameter
+        {
+            var sceneInstance = await CreateSceneAsync<TScene>();
+            if (sceneInstance == null) return default;
+            
+            await sceneInstance.Open(parameter);
+            return await sceneInstance.CloseAsync();
+        }
+
     }
 }
