@@ -81,13 +81,6 @@ namespace Ursa.Scenes
         {
             if (_handleBackKey && IsTopScene && Input.GetKeyDown(KeyCode.Escape))
                 OnBackKeyPressed();
-
-            var task = OnUpdateAsync();
-            task.ContinueWith(
-                t => Debug.LogException(t.Exception?.InnerException ?? t.Exception, this),
-                System.Threading.CancellationToken.None,
-                System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted,
-                System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         /// <summary>
@@ -99,12 +92,6 @@ namespace Ursa.Scenes
         {
             _ = CloseAsync();
         }
-
-        /// <summary>
-        /// 毎フレーム呼び出される更新処理。Update()の代わりにここに更新処理を書いてください。
-        /// 内部で発生した例外は自動的にデバッグログに出力されます。
-        /// </summary>
-        protected virtual Task OnUpdateAsync() => Task.CompletedTask;
     }
 
     /// <summary>
