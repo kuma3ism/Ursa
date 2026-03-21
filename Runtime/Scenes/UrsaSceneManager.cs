@@ -83,7 +83,7 @@ namespace Ursa.Scenes
                 // 2. 新しいシーンをロードする
                 string sceneName = typeof(TScene).Name;
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync() ?? Task.CompletedTask;
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
 
                 await Task.WhenAll(sceneLoadTask, resourceLoadTask);
                 Scene newlyLoadedScene = await sceneLoadTask;
@@ -139,7 +139,7 @@ namespace Ursa.Scenes
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading: {sceneName} ({mode})");
                 
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, mode);
-                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync() ?? Task.CompletedTask;
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
 
                 await Task.WhenAll(sceneLoadTask, resourceLoadTask);
                 Scene newlyLoadedScene = await sceneLoadTask;
@@ -232,7 +232,7 @@ namespace Ursa.Scenes
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
                 
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync() ?? Task.CompletedTask;
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
 
                 await Task.WhenAll(sceneLoadTask, resourceLoadTask);
                 Scene newlyLoadedScene = await sceneLoadTask;

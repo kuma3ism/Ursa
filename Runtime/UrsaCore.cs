@@ -38,7 +38,7 @@ namespace Ursa
 
 
     /// <summary>
-    /// パラメーターに実装することで、シーンのロードと並行してアセットの事前ダウンロードを行うインターフェース。
+    /// シーン遷移時に渡すパラメーターに実装することで、シーンのロードと並行してアセットの事前ダウンロードを行うインターフェース。
     /// フレームワークにより、以下のタイミングで自動的に呼び出されます。
     /// <list type="bullet">
     ///   <item>UrsaCore.Scene.PushAsync() — シーンロードと並行して</item>
@@ -48,7 +48,8 @@ namespace Ursa
     /// </summary>
     public interface ISceneResourcePreloader
     {
-        System.Threading.Tasks.Task PreloadResourcesAsync();
+        /// <param name="progress">プログレス通知。null の場合は通知なし。値は 0.0～1.0。</param>
+        System.Threading.Tasks.Task PreloadResourcesAsync(System.IProgress<float> progress = null);
     }
 
     /// <summary>

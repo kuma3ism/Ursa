@@ -77,7 +77,7 @@ namespace Ursa.Scenes
             // 子供が消えて自分が最前面になった時に呼ばれる
         }
 
-        protected void Update()
+        private void Update()
         {
             if (_handleBackKey && IsTopScene && Input.GetKeyDown(KeyCode.Escape))
                 OnBackKeyPressed();

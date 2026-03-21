@@ -10,6 +10,30 @@ https://github.com/kuma3ism/Ursa.git
 
 ---
 
+## エディターメニュー（シーンテンプレート自動生成）
+
+`Ursa/Create Scene...` または Project ビュー右クリック → `Assets/Create/Ursa/Create Scene...`
+
+| 項目 | 説明 |
+|---|---|
+| Feature Name | 機能名（フォルダ名・クラス名になる） |
+| Namespace | デフォルトは Feature Name と同じ |
+| With Result | `SceneBase<TParam, TResult>` 版を生成 |
+| Register to Build Settings | Build Settings に自動登録 |
+
+**生成されるフォルダ構成：**
+```
+{FeatureName}/
+├── Script/  → {FeatureName}.cs（SceneBase継承）
+├── Scene/   → {FeatureName}.unity（GameObjectアタッチ済み）
+├── Prefab/  （空、.gitkeep あり）
+└── Texture/ （空、.gitkeep あり）
+```
+
+> **Note:** スクリプトのアタッチはコンパイル完了後に自動実行されます。
+
+---
+
 ## セットアップ
 
 ゲーム起動時に `UrsaCore.Initialize()` を呼んで初期化します。
