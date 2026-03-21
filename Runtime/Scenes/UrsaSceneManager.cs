@@ -332,7 +332,7 @@ namespace Ursa.Scenes
             if (sceneInstance == null) return default;
 
             await sceneInstance.OpenAsync(parameter);
-            return await sceneInstance.CloseResultAsync();
+            return await sceneInstance.WaitForResultAsync();
         }
 
     }

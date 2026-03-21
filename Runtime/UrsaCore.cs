@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Ursa
 {
@@ -10,10 +9,6 @@ namespace Ursa
     /// </summary>
     public interface ISceneParameter
     {
-        /// <summary>
-        /// 新しいシーンをロードする際のモード。デフォルトは Single。
-        /// </summary>
-        LoadSceneMode Mode => LoadSceneMode.Single;
     }
 
     /// <summary>
@@ -21,9 +16,25 @@ namespace Ursa
     /// </summary>
     public static class UrsaCore
     {
-        public static ISceneManager Scene { get; set; }
-        public static bool IsReady => Scene != null;
-        public static void Dispose() => Scene = null;
+        private static ISceneManager _scene;
+
+        public static ISceneManager Scene =>
+            _scene ?? throw new InvalidOperationException("UrsaCore is not initialized.");
+
+        public static bool IsReady => _scene != null;
+
+        public static void Initialize(ISceneManager sceneManager)
+        {
+            if (_scene != null)
+                throw new InvalidOperationException("UrsaCore is already initialized.");
+
+            _scene = sceneManager ?? throw new ArgumentNullException(nameof(sceneManager));
+        }
+
+        public static void Dispose()
+        {
+            _scene = null;
+        }
     }
 
 

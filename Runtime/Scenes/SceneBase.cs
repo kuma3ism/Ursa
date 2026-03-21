@@ -95,18 +95,17 @@ namespace Ursa.Scenes
         /// 呼び出し元へ戻り値をセットし、自分自身を閉じて一つ前のシーンに戻ります。
         /// （シーン自身が「自身を閉じる」アクションとして呼び出します）
         /// </summary>
-        public async Task<TResult> CloseResultAsync(TResult result)
+        public async Task CloseAsync(TResult result)
         {
             await UrsaCore.Scene.PopAsync();
             _tcs?.TrySetResult(result);
-            return result;
         }
 
         /// <summary>
         /// このシーンが閉じられ、結果が返ってくるまで待機します。
         /// （呼び出し元のシーンが「結果を待つ」アクションとして呼び出します）
         /// </summary>
-        public Task<TResult> CloseResultAsync()
+        public Task<TResult> WaitForResultAsync()
         {
             return _tcs?.Task ?? Task.FromResult(default(TResult));
         }
