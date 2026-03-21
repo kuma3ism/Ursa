@@ -9,6 +9,8 @@ namespace Ursa.Scenes
     /// </summary>
     public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T> where T : ISceneParameter
     {
+        [SerializeField] private bool _handleBackKey = true;
+
         protected T Parameter { get; private set; }
 
         protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
@@ -68,6 +70,25 @@ namespace Ursa.Scenes
         {
             // 子供が消えて自分が最前面になった時に呼ばれる
         }
+
+        protected virtual void Update()
+        {
+            if (!_handleBackKey || !IsTopScene) return;
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                OnBackKeyPressed();
+            }
+        }
+
+        /// <summary>
+        /// Androidのバックキー（Escape）が押された際の処理。
+        /// デフォルトでは CloseAsync() を呼び出します。
+        /// 必要に応じてサブクラスでオーバーライドしてください。
+        /// </summary>
+        protected virtual void OnBackKeyPressed()
+        {
+            _ = CloseAsync();
+        }
     }
 
     /// <summary>
@@ -108,6 +129,15 @@ namespace Ursa.Scenes
         public Task<TResult> WaitForResultAsync()
         {
             return _tcs?.Task ?? Task.FromResult(default(TResult));
+        }
+
+        /// <summary>
+        /// Androidのバックキーによるキャンセル時は default(TResult) で閉じます。
+        /// キャンセル時の戻り値を変えたい場合はオーバーライドしてください。
+        /// </summary>
+        protected override void OnBackKeyPressed()
+        {
+            _ = CloseAsync(default);
         }
     }
 }
