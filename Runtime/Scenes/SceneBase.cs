@@ -15,28 +15,34 @@ namespace Ursa.Scenes
         /// <summary>バックキー（Escape）による自動戻り処理を有効/無効にします。</summary>
         protected void SetBackKeyEnabled(bool enabled) => _handleBackKey = enabled;
 
-        protected T Parameter { get; private set; }
+        protected T CurrentParam { get; private set; }
 
         protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
-
-        /// <summary>
-        /// シーンがロードされた直後に呼ばれる初期化処理。
-        /// 既存のインターフェースとの互換性のために実装されており、パラメーターの受け取りを行います。
-        /// 
-        /// 【！重要！】Unityの仕様上、Awake() や Start() はこの OpenAsync / OnEnterScene よりも先に（裏で）勝手に呼ばれます。
-        /// その時点ではまだパラメーター (this.Parameter) は null であるため、設定値を使った描画・通信などの初期化処理は
-        /// Start() ではなく、必ずこの OnEnterScene() の中に記述してください。（Awakeは非依存のボタン紐付け等のみ推奨）
-        /// </summary>
-        public virtual async Task OnEnterScene(T parameter)
-        {
-            this.Parameter = parameter;
-            await Task.CompletedTask;
-        }
 
         // 型なし ISceneReceiver の明示的実装（UrsaSceneManager からリフレクション不要で呼べる）
         async Task ISceneReceiver.OnEnterScene(ISceneParameter parameter)
         {
-            await OnEnterScene((T)parameter);
+            CurrentParam = (T)parameter;
+            await GetComponent<SceneBase<T>>().InitializeAsync((T)parameter);
+        }
+
+        // 型あり ISceneReceiver<T> の明示的実装
+        async Task ISceneReceiver<T>.OnEnterScene(T parameter)
+        {
+            CurrentParam = parameter;
+            await GetComponent<SceneBase<T>>().InitializeAsync(parameter);
+        }
+
+        /// <summary>
+        /// サブクラスでシーン固有の初期化処理を記述するためのメソッド。
+        /// OpenAsync / OnEnterScene から呼ばれます。
+        ///
+        /// 【！重要！】Unityの仕様上、Awake() や Start() はこのメソッドよりも先に呼ばれます。
+        /// その時点では CurrentParam はまだ null のため、パラメータを使った初期化はここに記述してください。
+        /// </summary>
+        protected virtual async Task InitializeAsync(T parameter)
+        {
+            await Task.CompletedTask;
         }
 
         /// <summary>
@@ -45,8 +51,9 @@ namespace Ursa.Scenes
         /// </summary>
         public virtual async Task OpenAsync(T parameter)
         {
+            CurrentParam = parameter;
             await UrsaCore.Scene.PushInstanceAsync(this.gameObject.scene);
-            await OnEnterScene(parameter);
+            await GetComponent<SceneBase<T>>().InitializeAsync(parameter);
         }
 
         /// <summary>
@@ -55,13 +62,14 @@ namespace Ursa.Scenes
         /// </summary>
         public virtual async Task ReplaceAsync(T parameter)
         {
+            CurrentParam = parameter;
             await UrsaCore.Scene.ReplaceInstanceAsync(this.gameObject.scene);
-            await OnEnterScene(parameter);
+            await GetComponent<SceneBase<T>>().InitializeAsync(parameter);
         }
 
         protected virtual void OnDestroy()
         {
-            var unloader = this.Parameter as ISceneResourceUnloader;
+            var unloader = this.CurrentParam as ISceneResourceUnloader;
             unloader?.UnloadResources();
         }
 

@@ -246,11 +246,11 @@ $@"using System.Threading.Tasks;
 using Ursa;
 using Ursa.Scenes;
 
-{nsOpen}{i}public class {name}Parameter : ISceneParameter {{ }}
-
-{i}public class {name} : SceneBase<{name}Parameter>
+{nsOpen}{i}public class {name} : SceneBase<{name}.Parameter>
 {i}{{
-{i}    public override async Task OpenAsync({name}Parameter parameter)
+{i}    public class Parameter : ISceneParameter {{ }}
+
+{i}    public override async Task OpenAsync(Parameter parameter)
 {i}    {{
 {i}        await base.OpenAsync(parameter);
 {i}    }}
@@ -274,13 +274,13 @@ $@"using System.Threading.Tasks;
 using Ursa;
 using Ursa.Scenes;
 
-{nsOpen}{i}public class {name}Parameter : ISceneParameter {{ }}
-
-{i}public class {name}Result {{ }}
-
-{i}public class {name} : SceneBase<{name}Parameter, {name}Result>
+{nsOpen}{i}public class {name} : SceneBase<{name}.Parameter, {name}.Result>
 {i}{{
-{i}    public override async Task OpenAsync({name}Parameter parameter)
+{i}    public class Parameter : ISceneParameter {{ }}
+
+{i}    public class Result {{ }}
+
+{i}    public override async Task OpenAsync(Parameter parameter)
 {i}    {{
 {i}        await base.OpenAsync(parameter);
 {i}    }}
