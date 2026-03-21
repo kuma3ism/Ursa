@@ -8,7 +8,7 @@ namespace Ursa.Scenes
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T> where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
 

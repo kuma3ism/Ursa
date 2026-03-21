@@ -193,11 +193,8 @@ namespace Ursa.Scenes
             {
                 foreach (var go in activeScene.GetRootGameObjects())
                 {
-                    var monos = go.GetComponentsInChildren<MonoBehaviour>();
-                    foreach (var m in monos)
-                    {
-                        m.SendMessage("OnBackToScene", null, SendMessageOptions.DontRequireReceiver);
-                    }
+                    foreach (var handler in go.GetComponentsInChildren<ISceneBackHandler>())
+                        handler.OnBackToScene();
                 }
             }
         }

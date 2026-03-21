@@ -79,4 +79,13 @@ namespace Ursa
     {
         System.Threading.Tasks.Task OnEnterScene(T parameter);
     }
+
+    /// <summary>
+    /// 前面にあった別シーンが閉じられ、このシーンが再び最前面になった際の通知を受け取るインターフェース。
+    /// SendMessage を使わずにインターフェース経由で型安全に呼び出されます。
+    /// </summary>
+    public interface ISceneBackHandler
+    {
+        void OnBackToScene();
+    }
 }
