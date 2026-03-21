@@ -40,7 +40,13 @@ namespace Ursa
 
 
     /// <summary>
-    /// シーン遷移時に渡すパラメーターのうち、シーンのロードと同時並行でアセット等の事前DLを行いたい場合に追加実装するインターフェース
+    /// パラメーターに実装することで、シーンのロードと並行してアセットの事前ダウンロードを行うインターフェース。
+    /// フレームワークにより、以下のタイミングで自動的に呼び出されます。
+    /// <list type="bullet">
+    ///   <item>UrsaCore.Scene.PushAsync() — シーンロードと並行して</item>
+    ///   <item>UrsaCore.Scene.ReplaceAsync() — シーンロードと並行して</item>
+    ///   <item>UrsaCore.Scene.CreateSceneAsync() — シーンロードと並行して</item>
+    /// </list>
     /// </summary>
     public interface ISceneResourcePreloader
     {
@@ -48,7 +54,8 @@ namespace Ursa
     }
 
     /// <summary>
-    /// シーン終了時（OnDestroy）に、パラメータに紐づくアセットやリソースの解放（Release）を自動実行するためのインターフェース
+    /// パラメーターに実装することで、シーン破棄時にアセットの解放を自動実行するインターフェース。
+    /// SceneBaseの OnDestroy() 内で自動的に呼び出されます。
     /// </summary>
     public interface ISceneResourceUnloader
     {
