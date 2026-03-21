@@ -16,6 +16,10 @@ namespace Ursa.Scenes
         /// <summary>
         /// シーンがロードされた直後に呼ばれる初期化処理。
         /// 既存のインターフェースとの互換性のために実装されており、パラメーターの受け取りを行います。
+        /// 
+        /// 【！重要！】Unityの仕様上、Awake() や Start() はこの OpenAsync / OnEnterScene よりも先に（裏で）勝手に呼ばれます。
+        /// その時点ではまだパラメーター (this.Parameter) は null であるため、設定値を使った描画・通信などの初期化処理は
+        /// Start() ではなく、必ずこの OnEnterScene() の中に記述してください。（Awakeは非依存のボタン紐付け等のみ推奨）
         /// </summary>
         public virtual async Task OnEnterScene(T parameter)
         {
@@ -102,7 +106,7 @@ namespace Ursa.Scenes
         /// このシーンが閉じられ、結果が返ってくるまで待機します。
         /// （呼び出し元のシーンが「結果を待つ」アクションとして呼び出します）
         /// </summary>
-        public new Task<TResult> CloseResultAsync()
+        public Task<TResult> CloseResultAsync()
         {
             return _tcs?.Task ?? Task.FromResult(default(TResult));
         }
