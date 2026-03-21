@@ -33,6 +33,9 @@ namespace Ursa
         /// </summary>
         bool IsTopScene(UnityEngine.SceneManagement.Scene scene);
 
+        /// <summary>シーン遷移中かどうかを返します。</summary>
+        bool IsTransitioning { get; }
+
         /// <summary>
         /// シーンをロードし、対象のコンポーネントインスタンスを生成・取得します（履歴にはまだ追加されません）。
         /// パラメーターが ISceneResourcePreloader を実装している場合は、シーンのロードと並行して事前DLが走ります。

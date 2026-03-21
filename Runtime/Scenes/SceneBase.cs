@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace Ursa.Scenes
 {
@@ -10,6 +11,9 @@ namespace Ursa.Scenes
     public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T> where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
+
+        /// <summary>バックキー（Escape）による自動戻り処理を有効/無効にします。</summary>
+        protected void SetBackKeyEnabled(bool enabled) => _handleBackKey = enabled;
 
         protected T Parameter { get; private set; }
 
@@ -77,9 +81,11 @@ namespace Ursa.Scenes
             // 子供が消えて自分が最前面になった時に呼ばれる
         }
 
-        private void Update()
+        private void LateUpdate()
         {
-            if (_handleBackKey && IsTopScene && Input.GetKeyDown(KeyCode.Escape))
+            if (!_handleBackKey || !IsTopScene) return;
+            if (UrsaCore.Scene?.IsTransitioning == true) return;
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 OnBackKeyPressed();
         }
 

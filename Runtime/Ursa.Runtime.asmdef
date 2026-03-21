@@ -1,7 +1,7 @@
 {
     "name": "Ursa.Runtime",
     "rootNamespace": "Ursa",
-    "references": [],
+    "references": ["Unity.InputSystem"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

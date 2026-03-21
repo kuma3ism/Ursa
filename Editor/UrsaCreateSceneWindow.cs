@@ -12,11 +12,14 @@ namespace Ursa.Editor
     /// </summary>
     public class UrsaCreateSceneWindow : EditorWindow
     {
+        private string _rootFolder = "Game";
         private string _featureName = "NewScene";
         private string _namespace = "";
         private bool _withResult = false;
         private bool _registerToBuildSettings = true;
         private bool _namespaceDirty = false;
+
+        private const string PrefKeyRootFolder = "Ursa_RootFolder";
 
         // コンパイル後にスクリプトアタッチするための SessionState キー
         private const string SessionKeyScenePath = "Ursa_PendingScenePath";
@@ -27,9 +30,16 @@ namespace Ursa.Editor
         public static void Open()
         {
             var window = GetWindow<UrsaCreateSceneWindow>(true, "Create Ursa Scene", true);
-            window.minSize = new Vector2(360, 180);
-            window.maxSize = new Vector2(360, 180);
+            window.minSize = new Vector2(360, 200);
+            window.maxSize = new Vector2(360, 200);
             window.Show();
+        }
+
+        private void OnEnable()
+        {
+            _rootFolder = EditorPrefs.GetString(PrefKeyRootFolder, "Game");
+            if (!_namespaceDirty)
+                _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
         }
 
         private void OnGUI()
@@ -37,14 +47,25 @@ namespace Ursa.Editor
             EditorGUILayout.Space(8);
 
             EditorGUI.BeginChangeCheck();
+            _rootFolder = EditorGUILayout.TextField("Root Folder", _rootFolder);
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorPrefs.SetString(PrefKeyRootFolder, _rootFolder);
+                if (!_namespaceDirty)
+                    _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
+            }
+
+            EditorGUILayout.Space(4);
+
+            EditorGUI.BeginChangeCheck();
             _featureName = EditorGUILayout.TextField("Feature Name", _featureName);
             if (EditorGUI.EndChangeCheck() && !_namespaceDirty)
-                _namespace = _featureName;
+                _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
 
             EditorGUI.BeginChangeCheck();
             _namespace = EditorGUILayout.TextField("Namespace", _namespace);
             if (EditorGUI.EndChangeCheck())
-                _namespaceDirty = _namespace != _featureName;
+                _namespaceDirty = _namespace != BuildDefaultNamespace(_rootFolder, _featureName);
 
             EditorGUILayout.Space(4);
             _withResult = EditorGUILayout.Toggle("With Result (戻り値あり)", _withResult);
@@ -53,8 +74,11 @@ namespace Ursa.Editor
             EditorGUILayout.Space(12);
 
             bool isValid = IsValidIdentifier(_featureName);
+            bool isSameAsNamespace = !string.IsNullOrWhiteSpace(_namespace) && _namespace == _featureName;
             if (!isValid)
                 EditorGUILayout.HelpBox("Feature Name はC#の識別子として有効な文字列にしてください。", MessageType.Warning);
+            if (isSameAsNamespace)
+                EditorGUILayout.HelpBox("Namespace と Feature Name が同じです。外部から 'Hoge.Hoge' のように参照が冗長になります。Namespace を変えることを推奨します。", MessageType.Warning);
 
             using (new EditorGUI.DisabledScope(!isValid))
             {
@@ -68,38 +92,50 @@ namespace Ursa.Editor
 
         private void CreateScene()
         {
-            string basePath   = GetSelectedFolderPath();
-            string featureDir = Path.Combine(basePath, _featureName);
+            // Assets/ で始まらない場合は自動補正（例: Game → Assets/Game）
+            string root = string.IsNullOrWhiteSpace(_rootFolder) ? "Assets" : _rootFolder.Trim('/');
+            string basePath = root.StartsWith("Assets") ? root : $"Assets/{root}";
+            string featureDir = $"{basePath}/{_featureName}";
 
             // --- 既存チェック ---
-            if (Directory.Exists(featureDir))
+            if (AssetDatabase.IsValidFolder(featureDir))
             {
                 if (!EditorUtility.DisplayDialog("確認",
                     $"'{_featureName}' はすでに存在します。上書きしますか？",
                     "上書き", "キャンセル"))
                     return;
             }
-            string scriptDir  = Path.Combine(featureDir, "Script");
-            string sceneDir   = Path.Combine(featureDir, "Scene");
-            string scriptPath = Path.Combine(scriptDir, $"{_featureName}.cs");
-            string scenePath  = Path.Combine(sceneDir,  $"{_featureName}.unity");
 
-            // --- フォルダ作成 ---
-            Directory.CreateDirectory(scriptDir);
-            Directory.CreateDirectory(sceneDir);
-            Directory.CreateDirectory(Path.Combine(featureDir, "Prefab"));
-            Directory.CreateDirectory(Path.Combine(featureDir, "Texture"));
+            string scriptDir  = $"{featureDir}/Script";
+            string sceneDir   = $"{featureDir}/Scene";
+
+            // File.WriteAllText 用の絶対パス
+            string projectRoot   = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string absFeatureDir = Path.Combine(projectRoot, featureDir);
+            string absScriptPath = Path.Combine(projectRoot, scriptDir, $"{_featureName}.cs");
+            string absPrefabKeep = Path.Combine(absFeatureDir, "Prefab", ".gitkeep");
+            string absTexKeep    = Path.Combine(absFeatureDir, "Texture", ".gitkeep");
+
+            // SaveScene 用のパス（Assets/ から始まる相対パス）
+            string scenePath = $"{sceneDir}/{_featureName}.unity";
+
+            // --- フォルダ作成（AssetDatabase経由でRefresh不要）---
+            EnsureFolder(basePath,    _featureName);
+            EnsureFolder(featureDir,  "Script");
+            EnsureFolder(featureDir,  "Scene");
+            EnsureFolder(featureDir,  "Prefab");
+            EnsureFolder(featureDir,  "Texture");
             // 空フォルダをGitで追跡するための.gitkeep
-            File.WriteAllText(Path.Combine(featureDir, "Prefab",  ".gitkeep"), "");
-            File.WriteAllText(Path.Combine(featureDir, "Texture", ".gitkeep"), "");
+            File.WriteAllText(absPrefabKeep, "");
+            File.WriteAllText(absTexKeep,    "");
 
             // --- C# スクリプト生成 ---
             string scriptContent = _withResult
                 ? GenerateScriptWithResult(_featureName, _namespace)
                 : GenerateScript(_featureName, _namespace);
-            File.WriteAllText(scriptPath, scriptContent);
+            File.WriteAllText(absScriptPath, scriptContent);
 
-            // --- シーン作成（スクリプトなしの GameObject を置く）---
+            // --- シーン作成 ---
             var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
             var rootGO = new GameObject(_featureName);
             SceneManager.MoveGameObjectToScene(rootGO, newScene);
@@ -117,10 +153,27 @@ namespace Ursa.Editor
             SessionState.SetString(SessionKeyScenePath, scenePath);
             SessionState.SetString(SessionKeyTypeName,  fullTypeName);
 
-            // コンパイル開始
+            // 最後に一度だけ Refresh（コンパイル開始）
             AssetDatabase.Refresh();
-            Debug.Log($"<color=cyan>[Ursa]</color> Generating scene... コンパイル後にスクリプトをアタッチします。");
+            Debug.Log($"<color=cyan>[Ursa]</color> Scene '{_featureName}' を生成しました → {featureDir}");
         }
+
+        /// <summary>フォルダが存在しない場合のみ作成する（中間フォルダも再帰的に作成）</summary>
+        private static void EnsureFolder(string parent, string folderName)
+        {
+            // 親フォルダも再帰的に保証する
+            if (!AssetDatabase.IsValidFolder(parent))
+            {
+                int lastSlash = parent.LastIndexOf('/');
+                if (lastSlash > 0)
+                    EnsureFolder(parent.Substring(0, lastSlash), parent.Substring(lastSlash + 1));
+            }
+
+            string path = $"{parent}/{folderName}";
+            if (!AssetDatabase.IsValidFolder(path))
+                AssetDatabase.CreateFolder(parent, folderName);
+        }
+
 
         /// <summary>
         /// コンパイル完了・エディター起動後に呼ばれ、予約されていたスクリプトを
@@ -202,11 +255,6 @@ using Ursa.Scenes;
 {i}        await base.OpenAsync(parameter);
 {i}    }}
 
-{i}    protected override async Task OnUpdateAsync()
-{i}    {{
-{i}        await Task.CompletedTask;
-{i}    }}
-
 {i}    public override void OnBackToScene()
 {i}    {{
 {i}        base.OnBackToScene();
@@ -237,11 +285,6 @@ using Ursa.Scenes;
 {i}        await base.OpenAsync(parameter);
 {i}    }}
 
-{i}    protected override async Task OnUpdateAsync()
-{i}    {{
-{i}        await Task.CompletedTask;
-{i}    }}
-
 {i}    public override void OnBackToScene()
 {i}    {{
 {i}        base.OnBackToScene();
@@ -264,6 +307,23 @@ using Ursa.Scenes;
             string path = AssetDatabase.GetAssetPath(Selection.activeObject);
             if (string.IsNullOrEmpty(path)) return "Assets";
             return Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+        }
+
+        /// <summary>Root Folder（例: Assets/Game/UI）からNamespace（例: Game.UI）を生成する</summary>
+        private static string RootFolderToNamespace(string rootFolder)
+        {
+            if (string.IsNullOrWhiteSpace(rootFolder)) return "";
+            string path = rootFolder.Trim('/');
+            if (path.StartsWith("Assets/")) path = path.Substring("Assets/".Length);
+            else if (path == "Assets")          return "";
+            return path.Replace('/', '.');
+        }
+
+        /// <summary>Root Folder + Feature Name を組み合わせたデフォルト Namespace を生成する</summary>
+        private static string BuildDefaultNamespace(string rootFolder, string featureName)
+        {
+            // Root Folder のみを使用（例: Assets/Game → Game）
+            return RootFolderToNamespace(rootFolder);
         }
 
         private static bool IsValidIdentifier(string name)

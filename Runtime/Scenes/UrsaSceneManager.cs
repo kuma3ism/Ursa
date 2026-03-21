@@ -15,6 +15,7 @@ namespace Ursa.Scenes
     public class UrsaSceneManager : ISceneManager
     {
         private bool _isTransitioning;
+        public bool IsTransitioning => _isTransitioning;
         private Stack<Scene> _history = new Stack<Scene>();
         private readonly ISceneLoader _sceneLoader;
 
