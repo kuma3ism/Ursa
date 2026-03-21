@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -173,35 +172,13 @@ namespace Ursa.Scenes
             Debug.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
 
-        private static readonly Dictionary<Type, MethodInfo> _receiverMethodCache = new();
-
         private async Task InjectParameterToScene(Scene targetScene, ISceneParameter parameter)
         {
-            var rootObjects = targetScene.GetRootGameObjects();
-            foreach (var go in rootObjects)
+            foreach (var go in targetScene.GetRootGameObjects())
             {
-                var receivers = go.GetComponentsInChildren<MonoBehaviour>();
-                foreach (var mono in receivers)
+                foreach (var receiver in go.GetComponentsInChildren<ISceneReceiver>())
                 {
-                    var monoType = mono.GetType();
-                    if (!_receiverMethodCache.TryGetValue(monoType, out var method))
-                    {
-                        var interfaces = monoType.GetInterfaces();
-                        var receiverInterface = interfaces.FirstOrDefault(i =>
-                            i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISceneReceiver<>));
-
-                        if (receiverInterface != null)
-                        {
-                            var expectedParamType = receiverInterface.GetGenericArguments()[0];
-                            method = expectedParamType.IsAssignableFrom(parameter.GetType())
-                                ? receiverInterface.GetMethod("OnEnterScene")
-                                : null;
-                        }
-                        _receiverMethodCache[monoType] = method; // nullも含めてキャッシュ
-                    }
-
-                    if (method != null)
-                        await (Task)method.Invoke(mono, new object[] { parameter });
+                    await receiver.OnEnterScene(parameter);
                 }
             }
         }

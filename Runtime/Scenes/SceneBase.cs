@@ -29,6 +29,12 @@ namespace Ursa.Scenes
             await Task.CompletedTask;
         }
 
+        // 型なし ISceneReceiver の明示的実装（UrsaSceneManager からリフレクション不要で呼べる）
+        async Task ISceneReceiver.OnEnterScene(ISceneParameter parameter)
+        {
+            await OnEnterScene((T)parameter);
+        }
+
         /// <summary>
         /// すでにロード済みのこのシーンインスタンスを履歴（スタック）の最前面にPushし、
         /// パラメーターを渡して初期化処理を開始します。
