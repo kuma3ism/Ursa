@@ -71,13 +71,17 @@ namespace Ursa.Scenes
             // 子供が消えて自分が最前面になった時に呼ばれる
         }
 
-        protected virtual void Update()
+        protected sealed override void Update()
         {
-            if (!_handleBackKey || !IsTopScene) return;
-            if (Input.GetKeyDown(KeyCode.Escape))
-            {
+            if (_handleBackKey && IsTopScene && Input.GetKeyDown(KeyCode.Escape))
                 OnBackKeyPressed();
-            }
+
+            var task = OnUpdateAsync();
+            task.ContinueWith(
+                t => Debug.LogException(t.Exception?.InnerException ?? t.Exception, this),
+                System.Threading.CancellationToken.None,
+                System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted,
+                System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         /// <summary>
@@ -89,6 +93,12 @@ namespace Ursa.Scenes
         {
             _ = CloseAsync();
         }
+
+        /// <summary>
+        /// 毎フレーム呼び出される更新処理。Update()の代わりにここに更新処理を書いてください。
+        /// 内部で発生した例外は自動的にデバッグログに出力されます。
+        /// </summary>
+        protected virtual Task OnUpdateAsync() => Task.CompletedTask;
     }
 
     /// <summary>
@@ -125,10 +135,14 @@ namespace Ursa.Scenes
         /// <summary>
         /// このシーンが閉じられ、結果が返ってくるまで待機します。
         /// （呼び出し元のシーンが「結果を待つ」アクションとして呼び出します）
+        /// 必ず OpenAsync() を呼んだ後に使用してください。
         /// </summary>
         public Task<TResult> WaitForResultAsync()
         {
-            return _tcs?.Task ?? Task.FromResult(default(TResult));
+            if (_tcs == null)
+                throw new System.InvalidOperationException(
+                    "[Ursa] WaitForResultAsync() は OpenAsync() を呼んだ後に使用してください。");
+            return _tcs.Task;
         }
 
         /// <summary>

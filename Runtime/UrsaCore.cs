@@ -25,9 +25,7 @@ namespace Ursa
 
         public static void Initialize(ISceneManager sceneManager)
         {
-            if (_scene != null)
-                throw new InvalidOperationException("UrsaCore is already initialized.");
-
+            if (_scene != null) Dispose(); // エディタ再Play時の再初期化を許容
             _scene = sceneManager ?? throw new ArgumentNullException(nameof(sceneManager));
         }
 

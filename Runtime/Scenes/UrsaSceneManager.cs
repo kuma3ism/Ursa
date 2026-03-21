@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -172,6 +173,8 @@ namespace Ursa.Scenes
             Debug.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
 
+        private static readonly Dictionary<Type, MethodInfo> _receiverMethodCache = new();
+
         private async Task InjectParameterToScene(Scene targetScene, ISceneParameter parameter)
         {
             var rootObjects = targetScene.GetRootGameObjects();
@@ -180,19 +183,25 @@ namespace Ursa.Scenes
                 var receivers = go.GetComponentsInChildren<MonoBehaviour>();
                 foreach (var mono in receivers)
                 {
-                    var interfaces = mono.GetType().GetInterfaces();
-                    var receiverInterface = interfaces.FirstOrDefault(i =>
-                        i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISceneReceiver<>));
-
-                    if (receiverInterface != null)
+                    var monoType = mono.GetType();
+                    if (!_receiverMethodCache.TryGetValue(monoType, out var method))
                     {
-                        var expectedParamType = receiverInterface.GetGenericArguments()[0];
-                        if (expectedParamType.IsAssignableFrom(parameter.GetType()))
+                        var interfaces = monoType.GetInterfaces();
+                        var receiverInterface = interfaces.FirstOrDefault(i =>
+                            i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISceneReceiver<>));
+
+                        if (receiverInterface != null)
                         {
-                            var method = receiverInterface.GetMethod("OnEnterScene");
-                            if (method != null) await (Task)method.Invoke(mono, new object[] { parameter });
+                            var expectedParamType = receiverInterface.GetGenericArguments()[0];
+                            method = expectedParamType.IsAssignableFrom(parameter.GetType())
+                                ? receiverInterface.GetMethod("OnEnterScene")
+                                : null;
                         }
+                        _receiverMethodCache[monoType] = method; // nullも含めてキャッシュ
                     }
+
+                    if (method != null)
+                        await (Task)method.Invoke(mono, new object[] { parameter });
                 }
             }
         }
