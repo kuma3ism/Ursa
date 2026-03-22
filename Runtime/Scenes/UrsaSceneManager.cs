@@ -194,7 +194,7 @@ namespace Ursa.Scenes
                 foreach (var go in activeScene.GetRootGameObjects())
                 {
                     foreach (var handler in go.GetComponentsInChildren<ISceneBackHandler>())
-                        handler.OnBackToScene();
+                        handler.OnResumeScene();
                 }
             }
         }

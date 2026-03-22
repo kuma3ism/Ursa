@@ -86,6 +86,6 @@ namespace Ursa
     /// </summary>
     public interface ISceneBackHandler
     {
-        void OnBackToScene();
+        void OnResumeScene();
     }
 }
