@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Ursa;
+using Ursa.Transitions;
 
 namespace Ursa.Scenes
 {
@@ -23,12 +24,35 @@ namespace Ursa.Scenes
             _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
         }
 
-        // 遷移フラグ管理を共通化
+        // 遷移フラグ管理を共通化（TransitionCanvas のシングルトンを使用）
         private async Task ExecuteTransitionAsync(Func<Task> action)
         {
+            var controller = GetActiveController();
+            var canvas = controller != null ? TransitionCanvas.EnsureInstance() : null;
+            canvas?.ApplyController(controller);
+
             _isTransitioning = true;
-            try { await action(); }
+            try
+            {
+                if (canvas != null) await canvas.PlayOutAsync();
+                await action();
+                if (canvas != null) await canvas.PlayInAsync();
+            }
             finally { _isTransitioning = false; }
+        }
+
+        // 現在最前面のシーンから TransitionController を取得（なければ null）
+        private TransitionController GetActiveController()
+        {
+            if (_history.Count == 0) return null;
+            var topScene = _history.Peek();
+            if (!topScene.IsValid() || !topScene.isLoaded) return null;
+            foreach (var go in topScene.GetRootGameObjects())
+            {
+                var controller = go.GetComponentInChildren<TransitionController>();
+                if (controller != null) return controller;
+            }
+            return null;
         }
 
         /// <summary>
