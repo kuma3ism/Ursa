@@ -4,7 +4,7 @@ Unityの俺俺フレームワーク
 
 いろんな現場で毎回同じような実装するのでフレームワークとして起こす
 
-- シーン管理（実装率９０％）
+- シーン管理
   - 履歴管理：シーンの追加、差替え、戻る、等の遷移の履歴を管理
   - 引数：起動時に引数を渡せる
   - 戻り値：シーンの終了時に戻り値も設定できる（あまり使われないと思う）
@@ -31,15 +31,6 @@ https://github.com/kuma3ism/Ursa.git
 | Namespace | デフォルトは Root Folder から自動生成（例: `Game` → `Game`） |
 | With Result | `SceneBaseWithResult<TParam, TResult>` 版を生成 |
 | Register to Build Settings | Build Settings に自動登録 |
-
-**生成されるフォルダ構成：**
-```
-{FeatureName}/
-├── Script/  → {FeatureName}.cs（SceneBase継承）
-├── Scene/   → {FeatureName}.unity（GameObjectアタッチ済み）
-├── Prefab/  （空、.gitkeep あり）
-└── Texture/ （空、.gitkeep あり）
-```
 
 > **Note:** スクリプトのアタッチはコンパイル完了後に自動実行されます。
 
