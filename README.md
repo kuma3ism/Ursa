@@ -17,7 +17,7 @@ https://github.com/kuma3ism/Ursa.git
 | 項目 | 説明 |
 |---|---|
 | Feature Name | 機能名（フォルダ名・クラス名になる） |
-| Namespace | デフォルトは Feature Name と同じ |
+| Namespace | デフォルトは Root Folder から自動生成（例: `Game` → `Game`） |
 | With Result | `SceneBaseWithResult<TParam, TResult>` 版を生成 |
 | Register to Build Settings | Build Settings に自動登録 |
 
@@ -238,6 +238,61 @@ public class MyParameter : ISceneParameter, ISceneResourceUnloader
     }
 }
 ```
+
+---
+
+## トランジション
+
+シーン遷移時にフェードなどの演出を挟むことができます。
+
+### セットアップ
+
+シーンの任意の GameObject に **`TransitionController`** コンポーネントを追加します（Inspector 右クリック → `Ursa/Transition Controller`）。
+
+追加すると `FadeTransitionEffect` Prefab が **Effect Prefab** フィールドに自動アサインされます。
+
+```
+SampleScene (GameObject)
+  └─ TransitionController
+       └─ Effect Prefab: FadeTransitionEffect (自動アサイン)
+```
+
+> `TransitionController` が見つからない場合はトランジションなしで遷移します（エラーにはなりません）。
+
+### 同梱 Prefab
+
+| Prefab | 演出 |
+|---|---|
+| `FadeTransitionEffect` | 画面全体がじわっと黒くなる（デフォルト） |
+| `AnimatorTransitionEffect` | Animator で制御するカスタム演出 |
+| `ShaderWipeTransitionEffect` | 左から右に黒が流れる |
+| `ShaderCircleTransitionEffect` | 中心から黒い円が広がる |
+| `ShaderDissolveTransitionEffect` | ランダムにパラパラ黒くなる |
+
+別の演出に切り替えるには **Effect Prefab** フィールドを差し替えるだけです。
+
+### カスタム演出を作る
+
+`TransitionEffectBase` を継承して `PlayOutAsync` / `PlayInAsync` を実装します。
+
+```csharp
+public class MyTransition : TransitionEffectBase
+{
+    public override async Task PlayOutAsync()
+    {
+        // 画面を覆う演出
+    }
+
+    public override async Task PlayInAsync()
+    {
+        // 画面を開ける演出
+    }
+}
+```
+
+### Prefab の再生成（開発者向け）
+
+Scripting Define Symbols に `URSA_DEVELOPER` を追加すると `Ursa/Create Transition Prefabs` メニューが現れ、Prefab を再生成できます。
 
 ---
 

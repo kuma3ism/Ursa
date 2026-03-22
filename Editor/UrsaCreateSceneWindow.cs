@@ -250,14 +250,19 @@ using Ursa.Scenes;
 {i}{{
 {i}    public class Parameter : ISceneParameter {{ }}
 
-{i}    public override async Task OpenAsync(Parameter parameter)
+{i}    protected override async Task OnInitializeAsync(Parameter parameter)
 {i}    {{
-{i}        await base.OpenAsync(parameter);
+{i}        await base.OnInitializeAsync(parameter);
 {i}    }}
 
-{i}    public override void OnBackToScene()
+{i}    public override void OnResumeScene()
 {i}    {{
-{i}        base.OnBackToScene();
+{i}        base.OnResumeScene();
+{i}    }}
+
+{i}    protected override void OnBackKeyPressed()
+{i}    {{
+{i}        _ = CloseAsync();
 {i}    }}
 {i}}}
 {nsClose}";
@@ -274,20 +279,20 @@ $@"using System.Threading.Tasks;
 using Ursa;
 using Ursa.Scenes;
 
-{nsOpen}{i}public class {name} : SceneBase<{name}.Parameter, {name}.Result>
+{nsOpen}{i}public class {name} : SceneBaseWithResult<{name}.Parameter, {name}.Result>
 {i}{{
 {i}    public class Parameter : ISceneParameter {{ }}
 
 {i}    public class Result {{ }}
 
-{i}    public override async Task OpenAsync(Parameter parameter)
+{i}    protected override async Task OnInitializeAsync(Parameter parameter)
 {i}    {{
-{i}        await base.OpenAsync(parameter);
+{i}        await base.OnInitializeAsync(parameter);
 {i}    }}
 
-{i}    public override void OnBackToScene()
+{i}    public override void OnResumeScene()
 {i}    {{
-{i}        base.OnBackToScene();
+{i}        base.OnResumeScene();
 {i}    }}
 
 {i}    protected override void OnBackKeyPressed()
