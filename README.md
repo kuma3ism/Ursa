@@ -18,7 +18,7 @@ https://github.com/kuma3ism/Ursa.git
 |---|---|
 | Feature Name | 機能名（フォルダ名・クラス名になる） |
 | Namespace | デフォルトは Feature Name と同じ |
-| With Result | `SceneBase<TParam, TResult>` 版を生成 |
+| With Result | `SceneBaseWithResult<TParam, TResult>` 版を生成 |
 | Register to Build Settings | Build Settings に自動登録 |
 
 **生成されるフォルダ構成：**
@@ -36,12 +36,14 @@ https://github.com/kuma3ism/Ursa.git
 
 ## セットアップ
 
-ゲーム起動時に `UrsaCore.Initialize()` を呼んで初期化します。
+ゲーム起動時に `UrsaCore.Initialize()` を呼んで初期化します。  
+`RuntimeInitializeOnLoadMethod` を使うと MonoBehaviour 不要で自動実行できます。
 
 ```csharp
-public class UrsaInitializer : MonoBehaviour
+public static class UrsaInitializer
 {
-    void Awake()
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Initialize()
     {
         UrsaCore.Initialize(new UrsaSceneManager());
     }
@@ -70,10 +72,11 @@ public class MySceneParameter : ISceneParameter
 ```csharp
 public class MyScene : SceneBase<MySceneParameter>
 {
-    public override async Task OpenAsync(MySceneParameter parameter)
+    protected override async Task OnInitializeAsync(MySceneParameter parameter)
     {
-        await base.OpenAsync(parameter);
-        // 初期化処理（this.Parameter はここから使える）
+        // パラメーターを使った初期化処理（CurrentParam もここから使える）
+        Debug.Log(parameter.Message);
+        await Task.CompletedTask;
     }
 }
 ```
@@ -88,11 +91,12 @@ public class MySceneResult
     public string Message;
 }
 
-public class MyScene : SceneBase<MySceneParameter, MySceneResult>
+public class MyScene : SceneBaseWithResult<MySceneParameter, MySceneResult>
 {
-    public override async Task OpenAsync(MySceneParameter parameter)
+    protected override async Task OnInitializeAsync(MySceneParameter parameter)
     {
-        await base.OpenAsync(parameter);
+        Debug.Log(parameter.Message);
+        await Task.CompletedTask;
     }
 
     // 結果を返して閉じる（シーン自身から呼ぶ）
@@ -103,8 +107,8 @@ public class MyScene : SceneBase<MySceneParameter, MySceneResult>
 }
 ```
 
-> **【重要】** Unityの仕様上、`Awake()` / `Start()` は `OpenAsync` より先に呼ばれます。  
-> `this.Parameter` を参照する初期化処理は必ず `OpenAsync()` or `OnEnterScene()` に書いてください。
+> **【重要】** Unityの仕様上、`Awake()` / `Start()` は `OnInitializeAsync` より先に呼ばれます。  
+> `CurrentParam` を参照する初期化処理は必ず `OnInitializeAsync()` に書いてください。
 
 ---
 
@@ -178,19 +182,19 @@ var result = await UrsaCore.Scene.OpenResultAsync<MyScene, MySceneParameter, MyS
 
 ## コールバック
 
-### `OnBackToScene()`
+### `OnResumeScene()`
 
 子シーンが閉じられ、自分が再び最前面になったときに呼ばれます。
 
 ```csharp
-public override void OnBackToScene()
+public override void OnResumeScene()
 {
-    base.OnBackToScene();
-    // 再表示時の処理
+    base.OnResumeScene();
+    // 再表示時の処理（リスト再取得など）
 }
 ```
 
-### `OnBackKeyPressed()`（Android バックキー対応）
+### `OnBackKeyPressed()`（Android バックキー・Escape 対応）
 
 インスペクターの `Handle Back Key` がON（デフォルト）かつ最前面のシーンのとき、バックキーで呼ばれます。
 
@@ -213,7 +217,7 @@ protected override void OnBackKeyPressed()
 ```csharp
 public class MyParameter : ISceneParameter, ISceneResourcePreloader
 {
-    public async Task PreloadResourcesAsync()
+    public async Task PreloadResourcesAsync(IProgress<float> progress = null)
     {
         // Addressables.LoadAssetAsync(...) など
         await Task.Delay(1000); // 例
@@ -244,3 +248,16 @@ public class MyParameter : ISceneParameter, ISceneResourceUnloader
 ```csharp
 UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader()));
 ```
+
+---
+
+## override 可能なメソッド一覧
+
+| メソッド | 修飾子 | 呼ばれるタイミング |
+|---|---|---|
+| `OnInitializeAsync(T)` | `protected virtual` | シーン入場時（パラメーター注入後） |
+| `OnResumeScene()` | `public virtual` | 前面シーンが閉じて自分が最前面に戻った時 |
+| `OnBackKeyPressed()` | `protected virtual` | バックキー（Escape）押下時 |
+| `OnDestroy()` | `protected virtual` | GameObjectが破棄される時（Unity） |
+
+> `OpenAsync` / `ReplaceAsync` / `CloseAsync` はコマンドメソッドのため override 不可です。

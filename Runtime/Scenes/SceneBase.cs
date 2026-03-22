@@ -34,11 +34,11 @@ namespace Ursa.Scenes
         }
 
         /// <summary>
-        /// サブクラスでシーン固有の初期化処理を記述するためのメソッド。
-        /// OpenAsync / OnEnterScene から呼ばれます。
+        /// サブクラスでシーン固有の初期化処理を記述するためのイベントメソッド。
+        /// <c>OpenAsync()</c> / <c>ReplaceAsync()</c> およびシーン遷移によるパラメーター注入時に呼ばれます。
         ///
-        /// 【！重要！】Unityの仕様上、Awake() や Start() はこのメソッドよりも先に呼ばれます。
-        /// その時点では CurrentParam はまだ null のため、パラメータを使った初期化はここに記述してください。
+        /// 【！重要！】Unityの仕様上、<c>Awake()</c> や <c>Start()</c> はこのメソッドよりも先に呼ばれます。
+        /// その時点では <c>CurrentParam</c> はまだ null のため、パラメータを使った初期化はここに記述してください。
         /// </summary>
         protected virtual async Task OnInitializeAsync(T parameter)
         {
@@ -117,6 +117,10 @@ namespace Ursa.Scenes
     {
         private TaskCompletionSource<TResult> _tcs;
 
+        /// <summary>
+        /// TCSを初期化し、サブクラスの <c>OnInitializeAsync</c> を呼び出します。
+        /// 入層時に必ず呼ばれるため、子クラスで <c>base.OnInitializeAsync</c> を呼ぶ必要はありません。
+        /// </summary>
         protected override async Task OnInitializeAsync(TParam parameter)
         {
             _tcs = new TaskCompletionSource<TResult>();
