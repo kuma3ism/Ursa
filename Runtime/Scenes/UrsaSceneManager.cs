@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -24,6 +23,14 @@ namespace Ursa.Scenes
             _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
         }
 
+        // 遷移フラグ管理を共通化
+        private async Task ExecuteTransitionAsync(Func<Task> action)
+        {
+            _isTransitioning = true;
+            try { await action(); }
+            finally { _isTransitioning = false; }
+        }
+
         /// <summary>
         /// 全履歴を捨てて、新しいシーンへ遷移 (Single)
         /// </summary>
@@ -36,7 +43,6 @@ namespace Ursa.Scenes
             }
 
             _history.Clear();
-
             await InternalLoad(typeof(TScene).Name, parameter, LoadSceneMode.Single);
         }
 
@@ -52,7 +58,6 @@ namespace Ursa.Scenes
             }
 
             if (_history.Count == 0) RegisterInitialScene();
-
             await InternalLoad(typeof(TScene).Name, parameter, LoadSceneMode.Additive);
         }
 
@@ -66,14 +71,13 @@ namespace Ursa.Scenes
                 Debug.LogWarning("[Ursa] 遷移中のため、ReplaceAsync 要求を無視しました。");
                 return;
             }
-            _isTransitioning = true; // 遷移開始
 
-            try
+            await ExecuteTransitionAsync(async () =>
             {
                 // 1. 今の一番上を取り出す
                 if (_history.Count > 0)
                 {
-                    Scene oldScene = _history.Pop(); // スタックから抜く
+                    Scene oldScene = _history.Pop();
                     if (oldScene.IsValid() && oldScene.isLoaded)
                     {
                         Debug.Log($"<color=orange>[Ursa]</color> Replacing: {oldScene.name}");
@@ -91,16 +95,10 @@ namespace Ursa.Scenes
 
                 // 3. 新しいシーンを登録する
                 if (newlyLoadedScene.IsValid())
-                {
-                    _history.Push(newlyLoadedScene); // 新しいシーンを積む
-                }
+                    _history.Push(newlyLoadedScene);
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
-            }
-            finally
-            {
-                _isTransitioning = false; // 確実にフラグを戻す
-            }
+            });
         }
 
         /// <summary>
@@ -114,8 +112,7 @@ namespace Ursa.Scenes
                 return;
             }
 
-            _isTransitioning = true;
-            try
+            await ExecuteTransitionAsync(async () =>
             {
                 Scene scene = _history.Pop();
                 if (scene.IsValid() && scene.isLoaded)
@@ -123,53 +120,37 @@ namespace Ursa.Scenes
                     Debug.Log($"<color=cyan>[Ursa]</color> Pop: {scene.name}");
                     await _sceneLoader.UnloadSceneAsync(scene);
                 }
-
                 NotifyBackToScene();
-            }
-            finally
-            {
-                _isTransitioning = false;
-            }
+            });
         }
 
         private async Task InternalLoad(string sceneName, ISceneParameter parameter, LoadSceneMode mode)
         {
-            _isTransitioning = true;
-            try
+            await ExecuteTransitionAsync(async () =>
             {
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading: {sceneName} ({mode})");
-                
+
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, mode);
                 Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
 
                 await Task.WhenAll(sceneLoadTask, resourceLoadTask);
                 Scene newlyLoadedScene = await sceneLoadTask;
-                
+
                 if (!newlyLoadedScene.IsValid()) return;
 
                 _history.Push(newlyLoadedScene);
 
                 if (parameter != null)
-                {
                     await InjectParameterToScene(newlyLoadedScene, parameter);
-                }
-            }
-            finally
-            {
-                _isTransitioning = false;
-            }
+            });
         }
-
 
         private void RegisterInitialScene()
         {
-            // すでに履歴があるなら何もしない
             if (_history.Count > 0) return;
 
             Scene active = SceneManager.GetActiveScene();
-
             _history.Push(active);
-
             Debug.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
 
@@ -201,15 +182,8 @@ namespace Ursa.Scenes
 
         public bool IsTopScene(Scene scene)
         {
-            // 履歴が空なら、今いるシーンを登録しちゃう
             if (_history.Count == 0) RegisterInitialScene();
-
-            if (_history.Count > 0)
-            {
-                Scene topScene = _history.Peek();
-                return topScene.handle == scene.handle;
-            }
-            return false;
+            return _history.Peek().handle == scene.handle;
         }
 
         /// <summary>
@@ -223,12 +197,14 @@ namespace Ursa.Scenes
                 Debug.LogWarning("[Ursa] 遷移中のため、CreateSceneAsync 要求を無視しました。");
                 return null;
             }
+
             string sceneName = typeof(TScene).Name;
-            _isTransitioning = true;
-            try
+            TScene result = null;
+
+            await ExecuteTransitionAsync(async () =>
             {
                 Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
-                
+
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
                 Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
 
@@ -238,39 +214,39 @@ namespace Ursa.Scenes
                 if (!newlyLoadedScene.IsValid())
                 {
                     Debug.LogWarning($"[Ursa] {sceneName} シーンのロードに失敗しました。");
-                    return null;
+                    return;
                 }
 
                 foreach (var go in newlyLoadedScene.GetRootGameObjects())
                 {
                     var comp = go.GetComponentInChildren<TScene>(true);
-                    if (comp != null) return comp;
+                    if (comp != null)
+                    {
+                        result = comp;
+                        return;
+                    }
                 }
 
                 Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
-                return null;
-            }
-            finally
-            {
-                _isTransitioning = false;
-            }
+            });
+
+            return result;
         }
 
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
         /// </summary>
-        public async Task PushInstanceAsync(Scene scene)
+        public Task PushInstanceAsync(Scene scene)
         {
             if (_isTransitioning)
             {
                 Debug.LogWarning("[Ursa] 遷移中のため、PushInstanceAsync 要求を無視しました。");
-                return;
+                return Task.CompletedTask;
             }
 
             if (_history.Count == 0) RegisterInitialScene();
-
             _history.Push(scene);
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -283,8 +259,8 @@ namespace Ursa.Scenes
                 Debug.LogWarning("[Ursa] 遷移中のため、ReplaceInstanceAsync 要求を無視しました。");
                 return;
             }
-            _isTransitioning = true;
-            try
+
+            await ExecuteTransitionAsync(async () =>
             {
                 if (_history.Count > 0)
                 {
@@ -295,13 +271,8 @@ namespace Ursa.Scenes
                         await _sceneLoader.UnloadSceneAsync(oldScene);
                     }
                 }
-
                 _history.Push(scene);
-            }
-            finally
-            {
-                _isTransitioning = false;
-            }
+            });
         }
 
         /// <summary>
@@ -309,7 +280,7 @@ namespace Ursa.Scenes
         /// そのシーンが閉じられて結果が返ってくるまで待機して値を返します。
         /// </summary>
         public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter)
-            where TScene : SceneBase<TParam, TResult>
+            where TScene : SceneBaseWithResult<TParam, TResult>
             where TParam : ISceneParameter
         {
             var sceneInstance = await CreateSceneAsync<TScene>(parameter);
@@ -318,6 +289,5 @@ namespace Ursa.Scenes
             await sceneInstance.OpenAsync(parameter);
             return await sceneInstance.WaitForResultAsync();
         }
-
     }
 }

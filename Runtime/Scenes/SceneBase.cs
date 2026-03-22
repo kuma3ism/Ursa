@@ -23,14 +23,14 @@ namespace Ursa.Scenes
         async Task ISceneReceiver.OnEnterScene(ISceneParameter parameter)
         {
             CurrentParam = (T)parameter;
-            await GetComponent<SceneBase<T>>().InitializeAsync((T)parameter);
+            await OnInitializeAsync((T)parameter);
         }
 
         // 型あり ISceneReceiver<T> の明示的実装
         async Task ISceneReceiver<T>.OnEnterScene(T parameter)
         {
             CurrentParam = parameter;
-            await GetComponent<SceneBase<T>>().InitializeAsync(parameter);
+            await OnInitializeAsync(parameter);
         }
 
         /// <summary>
@@ -40,7 +40,7 @@ namespace Ursa.Scenes
         /// 【！重要！】Unityの仕様上、Awake() や Start() はこのメソッドよりも先に呼ばれます。
         /// その時点では CurrentParam はまだ null のため、パラメータを使った初期化はここに記述してください。
         /// </summary>
-        protected virtual async Task InitializeAsync(T parameter)
+        protected virtual async Task OnInitializeAsync(T parameter)
         {
             await Task.CompletedTask;
         }
@@ -49,22 +49,22 @@ namespace Ursa.Scenes
         /// すでにロード済みのこのシーンインスタンスを履歴（スタック）の最前面にPushし、
         /// パラメーターを渡して初期化処理を開始します。
         /// </summary>
-        public virtual async Task OpenAsync(T parameter)
+        public async Task OpenAsync(T parameter)
         {
             CurrentParam = parameter;
             await UrsaCore.Scene.PushInstanceAsync(this.gameObject.scene);
-            await GetComponent<SceneBase<T>>().InitializeAsync(parameter);
+            await OnInitializeAsync(parameter);
         }
 
         /// <summary>
         /// すでにロード済みのこのシーンインスタンスを現在の最前面のシーンと入れ替え（Replace）し、
         /// パラメーターを渡して初期化処理を開始します。
         /// </summary>
-        public virtual async Task ReplaceAsync(T parameter)
+        public async Task ReplaceAsync(T parameter)
         {
             CurrentParam = parameter;
             await UrsaCore.Scene.ReplaceInstanceAsync(this.gameObject.scene);
-            await GetComponent<SceneBase<T>>().InitializeAsync(parameter);
+            await OnInitializeAsync(parameter);
         }
 
         protected virtual void OnDestroy()
@@ -76,7 +76,7 @@ namespace Ursa.Scenes
         /// <summary>
         /// 現在最前面にある自分自身のシーンを破棄し、一つ前のシーンに戻ります。
         /// </summary>
-        public virtual async Task CloseAsync()
+        public async Task CloseAsync()
         {
             await UrsaCore.Scene.PopAsync();
         }
@@ -112,28 +112,30 @@ namespace Ursa.Scenes
     /// ユーザーの選択結果や処理データなど、呼び出し元に戻り値（結果）を返すシーンのベースクラス。
     /// ポップアップダイアログや、確認画面などで使用します。
     /// </summary>
-    public abstract class SceneBase<TParam, TResult> : SceneBase<TParam>
+    public abstract class SceneBaseWithResult<TParam, TResult> : SceneBase<TParam>
         where TParam : ISceneParameter
     {
         private TaskCompletionSource<TResult> _tcs;
 
-        public override async Task OpenAsync(TParam parameter)
+        protected override async Task OnInitializeAsync(TParam parameter)
         {
             _tcs = new TaskCompletionSource<TResult>();
-            await base.OpenAsync(parameter);
+            await base.OnInitializeAsync(parameter);
         }
 
-        public override async Task ReplaceAsync(TParam parameter)
+        /// <summary>
+        /// 引数なしで閉じる場合も default(TResult) をセットして正しく閉じます。
+        /// </summary>
+        public new async Task CloseAsync()
         {
-            _tcs = new TaskCompletionSource<TResult>();
-            await base.ReplaceAsync(parameter);
+            await CloseAsync(default(TResult));
         }
 
         /// <summary>
         /// 呼び出し元へ戻り値をセットし、自分自身を閉じて一つ前のシーンに戻ります。
         /// （シーン自身が「自身を閉じる」アクションとして呼び出します）
         /// </summary>
-        public async Task CloseAsync(TResult result)
+        public async Task CloseAsync(TResult result = default)
         {
             await UrsaCore.Scene.PopAsync();
             _tcs?.TrySetResult(result);
@@ -158,7 +160,7 @@ namespace Ursa.Scenes
         /// </summary>
         protected override void OnBackKeyPressed()
         {
-            _ = CloseAsync(default);
+            _ = CloseAsync();
         }
     }
 }

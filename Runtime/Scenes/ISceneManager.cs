@@ -56,7 +56,7 @@ namespace Ursa
         /// 戻り値を持つシーンをロードし、そのポップアップ等が終了して結果が返ってくるまで待機します。
         /// </summary>
         Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter)
-            where TScene : Ursa.Scenes.SceneBase<TParam, TResult>
+            where TScene : Ursa.Scenes.SceneBaseWithResult<TParam, TResult>
             where TParam : ISceneParameter;
     }
 }
