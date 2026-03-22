@@ -19,6 +19,10 @@ namespace Ursa.Scenes
         private Stack<Scene> _history = new Stack<Scene>();
         private readonly ISceneLoader _sceneLoader;
 
+        // Buffers to avoid allocations
+        private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
+        private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
+
         public UrsaSceneManager(ISceneLoader sceneLoader = null)
         {
             _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
@@ -47,12 +51,20 @@ namespace Ursa.Scenes
             if (_history.Count == 0) return null;
             var topScene = _history.Peek();
             if (!topScene.IsValid() || !topScene.isLoaded) return null;
-            foreach (var go in topScene.GetRootGameObjects())
+
+            topScene.GetRootGameObjects(_rootGameObjectBuffer);
+            TransitionController result = null;
+            foreach (var go in _rootGameObjectBuffer)
             {
                 var controller = go.GetComponentInChildren<TransitionController>();
-                if (controller != null) return controller;
+                if (controller != null)
+                {
+                    result = controller;
+                    break;
+                }
             }
-            return null;
+            _rootGameObjectBuffer.Clear();
+            return result;
         }
 
         /// <summary>
@@ -196,11 +208,15 @@ namespace Ursa.Scenes
             Scene activeScene = _history.Peek();
             if (activeScene.IsValid() && activeScene.isLoaded)
             {
-                foreach (var go in activeScene.GetRootGameObjects())
+                activeScene.GetRootGameObjects(_rootGameObjectBuffer);
+                foreach (var go in _rootGameObjectBuffer)
                 {
-                    foreach (var handler in go.GetComponentsInChildren<ISceneBackHandler>())
+                    go.GetComponentsInChildren<ISceneBackHandler>(_backHandlerBuffer);
+                    foreach (var handler in _backHandlerBuffer)
                         handler.OnResumeScene();
+                    _backHandlerBuffer.Clear();
                 }
+                _rootGameObjectBuffer.Clear();
             }
         }
 
@@ -241,15 +257,18 @@ namespace Ursa.Scenes
                     return;
                 }
 
-                foreach (var go in newlyLoadedScene.GetRootGameObjects())
+                newlyLoadedScene.GetRootGameObjects(_rootGameObjectBuffer);
+                foreach (var go in _rootGameObjectBuffer)
                 {
                     var comp = go.GetComponentInChildren<TScene>(true);
                     if (comp != null)
                     {
                         result = comp;
+                        _rootGameObjectBuffer.Clear();
                         return;
                     }
                 }
+                _rootGameObjectBuffer.Clear();
 
                 Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
             });
