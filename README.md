@@ -65,43 +65,6 @@ public static class UrsaInitializer
 > `UrsaCore` は静的なサービスロケーターです。`Initialize()` で `ISceneManager` の実装を登録し、
 > 以降はどこからでも `UrsaCore.Scene` 経由でアクセスできます。
 
-### VContainer と組み合わせる場合
-
-VContainer を使っている場合は、`LifetimeScope` でシングルトンとして登録し、
-エントリーポイントから `UrsaCore.Initialize()` に渡すことで DI 管理下に置けます。
-
-```csharp
-// LifetimeScope
-public class GameLifetimeScope : LifetimeScope
-{
-    protected override void Configure(IContainerBuilder builder)
-    {
-        builder.Register<UrsaSceneManager>(Lifetime.Singleton);
-        builder.RegisterEntryPoint<UrsaEntryPoint>();
-    }
-}
-
-// エントリーポイント
-public class UrsaEntryPoint : IStartable
-{
-    private readonly UrsaSceneManager _sceneManager;
-
-    public UrsaEntryPoint(UrsaSceneManager sceneManager)
-    {
-        _sceneManager = sceneManager;
-    }
-
-    public void Start()
-    {
-        UrsaCore.Initialize(_sceneManager);
-    }
-}
-```
-
-> `UrsaSceneManager` のライフタイムは VContainer が管理するシングルトンになります。
-> `RuntimeInitializeOnLoadMethod` による初期化とは併用しないでください。
-
----
 
 ## シーンの作り方
 
