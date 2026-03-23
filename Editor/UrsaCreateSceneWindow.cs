@@ -37,7 +37,16 @@ namespace Ursa.Editor
 
         private void OnEnable()
         {
-            _rootFolder = EditorPrefs.GetString(PrefKeyRootFolder, "Game");
+            string selectedPath = GetSelectedFolderPath();
+            if (!string.IsNullOrEmpty(selectedPath) && selectedPath != "Assets")
+            {
+                _rootFolder = selectedPath;
+            }
+            else
+            {
+                _rootFolder = EditorPrefs.GetString(PrefKeyRootFolder, "Game");
+            }
+
             if (!_namespaceDirty)
                 _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
         }
