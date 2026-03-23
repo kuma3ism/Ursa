@@ -49,7 +49,7 @@ namespace Ursa.Scenes
         /// すでにロード済みのこのシーンインスタンスを履歴（スタック）の最前面にPushし、
         /// パラメーターを渡して初期化処理を開始します。
         /// </summary>
-        public async Task OpenAsync(T parameter)
+        internal async Task OpenAsync(T parameter)
         {
             CurrentParam = parameter;
             await UrsaCore.Scene.PushInstanceAsync(this.gameObject.scene);

@@ -2,7 +2,8 @@
     "name": "Ursa.Editor",
     "rootNamespace": "Ursa.Editor",
     "references": [
-        "Ursa.Runtime"
+        "Ursa.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "includePlatforms": [
         "Editor"

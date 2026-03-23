@@ -2,7 +2,9 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using Ursa.Transitions;
 
 namespace Ursa.Editor
 {
@@ -139,6 +141,30 @@ namespace Ursa.Editor
             var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
             var rootGO = new GameObject(_featureName);
             SceneManager.MoveGameObjectToScene(rootGO, newScene);
+
+            // Main Camera
+            var cameraGO = new GameObject("Main Camera");
+            cameraGO.tag = "MainCamera";
+            cameraGO.AddComponent<Camera>();
+            cameraGO.AddComponent<AudioListener>();
+            SceneManager.MoveGameObjectToScene(cameraGO, newScene);
+
+            // Directional Light
+            var lightGO = new GameObject("Directional Light");
+            var light = lightGO.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1f;
+            lightGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            SceneManager.MoveGameObjectToScene(lightGO, newScene);
+
+            // Global Volume
+            var volumeGO = new GameObject("Global Volume");
+            var volume = volumeGO.AddComponent<Volume>();
+            volume.isGlobal = true;
+            var defaultProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/Settings/DefaultVolumeProfile.asset");
+            if (defaultProfile != null) volume.sharedProfile = defaultProfile;
+            SceneManager.MoveGameObjectToScene(volumeGO, newScene);
+
             EditorSceneManager.SaveScene(newScene, scenePath);
             EditorSceneManager.CloseScene(newScene, true);
 
@@ -222,6 +248,7 @@ namespace Ursa.Editor
             foreach (var go in scene.GetRootGameObjects())
             {
                 go.AddComponent(targetScript.GetClass());
+                go.AddComponent<TransitionController>();
                 break; // 最初の Root GO にアタッチ
             }
             EditorSceneManager.SaveScene(scene);
@@ -248,7 +275,7 @@ using Ursa.Scenes;
 
 {nsOpen}{i}public class {name} : SceneBase<{name}.Parameter>
 {i}{{
-{i}    public class Parameter : ISceneParameter {{ }}
+{i}    public class Parameter : ISceneParameter {{ public string Message; }}
 
 {i}    protected override async Task OnInitializeAsync(Parameter parameter)
 {i}    {{
@@ -281,7 +308,7 @@ using Ursa.Scenes;
 
 {nsOpen}{i}public class {name} : SceneBaseWithResult<{name}.Parameter, {name}.Result>
 {i}{{
-{i}    public class Parameter : ISceneParameter {{ }}
+{i}    public class Parameter : ISceneParameter {{ public string Message; }}
 
 {i}    public class Result {{ }}
 

@@ -151,14 +151,11 @@ await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 
 ## インスタンスベースの操作
 
-シーンをロードしてから、タイミングを制御して開くことができます。
+シーンをロードしてから、タイミングを制御して Replace することができます。
 
 ```csharp
 // ロード（まだ履歴には積まれない）
 MyScene scene = await UrsaCore.Scene.CreateSceneAsync<MyScene>();
-
-// Pushして開く
-await scene.OpenAsync(new MySceneParameter { Message = "Hello!" });
 
 // Replaceして開く
 await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
@@ -169,18 +166,8 @@ await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 ## 戻り値を受け取る（ポップアップ待機）
 
 ```csharp
-// 呼び出し元で:
-MyScene popup = await UrsaCore.Scene.CreateSceneAsync<MyScene>(param);
-await popup.OpenAsync(param);
-
-MySceneResult result = await popup.WaitForResultAsync(); // 閉じられるまで待機
-Debug.Log(result.IsConfirmed);
-```
-
-または `OpenResultAsync` でまとめて行うこともできます:
-
-```csharp
 var result = await UrsaCore.Scene.OpenResultAsync<MyScene, MySceneParameter, MySceneResult>(param);
+Debug.Log(result.IsConfirmed);
 ```
 
 ---
@@ -320,4 +307,4 @@ UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader()));
 | `OnBackKeyPressed()` | `protected virtual` | バックキー（Escape）押下時 |
 | `OnDestroy()` | `protected virtual` | GameObjectが破棄される時（Unity） |
 
-> `OpenAsync` / `ReplaceAsync` / `CloseAsync` はコマンドメソッドのため override 不可です。
+> `ReplaceAsync` / `CloseAsync` はコマンドメソッドのため override 不可です。
