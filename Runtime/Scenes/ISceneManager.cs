@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -15,6 +17,7 @@ namespace Ursa
 
         /// <summary>
         /// 現在のシーンの上に、指定したシーンを新しく重ねて（Additive）履歴に追加します。
+        /// パラメーターの IsHistory が false の場合、シーンは表示されますが履歴には積まれません。
         /// </summary>
         Task PushAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
 
@@ -58,5 +61,23 @@ namespace Ursa
         Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter)
             where TScene : Ursa.Scenes.SceneBaseWithResult<TParam, TResult>
             where TParam : ISceneParameter;
+
+        /// <summary>
+        /// 現在の履歴スタックを古い順（インデックス0が最も古い）で返します。
+        /// </summary>
+        IReadOnlyList<ISceneHistoryEntry> History { get; }
+
+        /// <summary>
+        /// 履歴スタック内で最も直近にある TScene 型のシーンまで一気にPopします。
+        /// 自分自身（最前面の非履歴シーン）はそのまま残ります。
+        /// 対象が見つからない場合は InvalidOperationException をスローします。
+        /// </summary>
+        Task JumpToAsync<TScene>() where TScene : MonoBehaviour;
+
+        /// <summary>
+        /// 指定したインデックスのシーンまで一気にPopします（インデックス0が最も古い）。
+        /// 範囲外の場合は ArgumentOutOfRangeException をスローします。
+        /// </summary>
+        Task JumpToIndexAsync(int index);
     }
 }
