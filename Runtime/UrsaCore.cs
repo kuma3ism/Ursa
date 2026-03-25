@@ -9,6 +9,26 @@ namespace Ursa
     /// </summary>
     public interface ISceneParameter
     {
+        /// <summary>
+        /// このシーンを履歴（スタック）に積むかどうか。
+        /// デフォルトは true。false にすると、シーンは表示されるが履歴には残りません。
+        /// </summary>
+        bool IsHistory => true;
+    }
+
+    /// <summary>
+    /// 履歴スタック上の1エントリを表すインターフェース
+    /// </summary>
+    public interface ISceneHistoryEntry
+    {
+        /// <summary>履歴内のインデックス（0が最も古い）</summary>
+        int Index { get; }
+
+        /// <summary>シーン名</summary>
+        string SceneName { get; }
+
+        /// <summary>シーンの型</summary>
+        Type SceneType { get; }
     }
 
     /// <summary>
