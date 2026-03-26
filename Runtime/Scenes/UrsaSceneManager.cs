@@ -33,14 +33,16 @@ namespace Ursa.Scenes
         private List<SceneHistoryEntry> _history = new List<SceneHistoryEntry>();
 
         private readonly ISceneLoader _sceneLoader;
+        private readonly IUrsaLogger _logger;
 
         // Buffers to avoid allocations
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
 
-        public UrsaSceneManager(ISceneLoader sceneLoader = null)
+        public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
             _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
+            _logger = logger ?? new UnityDebugLogger();
         }
 
         /// <inheritdoc />
@@ -93,7 +95,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、ResetAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、ResetAsync 要求を無視しました。");
                 return;
             }
 
@@ -109,7 +111,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、PushAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、PushAsync 要求を無視しました。");
                 return;
             }
 
@@ -124,7 +126,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、ReplaceAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、ReplaceAsync 要求を無視しました。");
                 return;
             }
 
@@ -137,7 +139,7 @@ namespace Ursa.Scenes
                     _history.RemoveAt(_history.Count - 1);
                     if (oldEntry.Scene.IsValid() && oldEntry.Scene.isLoaded)
                     {
-                        Debug.Log($"<color=orange>[Ursa]</color> Replacing: {oldEntry.Scene.name}");
+                        _logger.Log($"<color=orange>[Ursa]</color> Replacing: {oldEntry.Scene.name}");
                         await _sceneLoader.UnloadSceneAsync(oldEntry.Scene);
                     }
                 }
@@ -165,7 +167,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning || _history.Count <= 1)
             {
-                Debug.LogWarning("[Ursa] 戻る先のシーンがない、もしくは遷移中です。");
+                _logger.LogWarning("[Ursa] 戻る先のシーンがない、もしくは遷移中です。");
                 return;
             }
 
@@ -175,7 +177,7 @@ namespace Ursa.Scenes
                 _history.RemoveAt(_history.Count - 1);
                 if (entry.Scene.IsValid() && entry.Scene.isLoaded)
                 {
-                    Debug.Log($"<color=cyan>[Ursa]</color> Pop: {entry.Scene.name}");
+                    _logger.Log($"<color=cyan>[Ursa]</color> Pop: {entry.Scene.name}");
                     await _sceneLoader.UnloadSceneAsync(entry.Scene);
                 }
                 NotifyBackToScene();
@@ -220,7 +222,7 @@ namespace Ursa.Scenes
 
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、JumpToIndexAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、JumpToIndexAsync 要求を無視しました。");
                 return;
             }
 
@@ -233,7 +235,7 @@ namespace Ursa.Scenes
                     _history.RemoveAt(_history.Count - 1);
                     if (entry.Scene.IsValid() && entry.Scene.isLoaded)
                     {
-                        Debug.Log($"<color=cyan>[Ursa]</color> JumpTo Pop: {entry.Scene.name}");
+                        _logger.Log($"<color=cyan>[Ursa]</color> JumpTo Pop: {entry.Scene.name}");
                         await _sceneLoader.UnloadSceneAsync(entry.Scene);
                     }
                 }
@@ -245,7 +247,7 @@ namespace Ursa.Scenes
         {
             await ExecuteTransitionAsync(async () =>
             {
-                Debug.Log($"<color=cyan>[Ursa]</color> Loading: {sceneName} ({mode})");
+                _logger.Log($"<color=cyan>[Ursa]</color> Loading: {sceneName} ({mode})");
 
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, mode);
                 Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
@@ -285,7 +287,7 @@ namespace Ursa.Scenes
 
             Scene active = SceneManager.GetActiveScene();
             PushHistory(active, null);
-            Debug.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
+            _logger.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
 
         private async Task InjectParameterToScene(Scene targetScene, ISceneParameter parameter)
@@ -332,7 +334,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、CreateSceneAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、CreateSceneAsync 要求を無視しました。");
                 return null;
             }
 
@@ -341,7 +343,7 @@ namespace Ursa.Scenes
 
             await ExecuteTransitionAsync(async () =>
             {
-                Debug.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
+                _logger.Log($"<color=cyan>[Ursa]</color> Loading Instance: {sceneName}");
 
                 Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
                 Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
@@ -351,7 +353,7 @@ namespace Ursa.Scenes
 
                 if (!newlyLoadedScene.IsValid())
                 {
-                    Debug.LogWarning($"[Ursa] {sceneName} シーンのロードに失敗しました。");
+                    _logger.LogWarning($"[Ursa] {sceneName} シーンのロードに失敗しました。");
                     return;
                 }
 
@@ -368,7 +370,7 @@ namespace Ursa.Scenes
                 }
                 _rootGameObjectBuffer.Clear();
 
-                Debug.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
+                _logger.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
             });
 
             return result;
@@ -381,7 +383,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、PushInstanceAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、PushInstanceAsync 要求を無視しました。");
                 return Task.CompletedTask;
             }
 
@@ -397,7 +399,7 @@ namespace Ursa.Scenes
         {
             if (_isTransitioning)
             {
-                Debug.LogWarning("[Ursa] 遷移中のため、ReplaceInstanceAsync 要求を無視しました。");
+                _logger.LogWarning("[Ursa] 遷移中のため、ReplaceInstanceAsync 要求を無視しました。");
                 return;
             }
 
@@ -409,7 +411,7 @@ namespace Ursa.Scenes
                     _history.RemoveAt(_history.Count - 1);
                     if (oldEntry.Scene.IsValid() && oldEntry.Scene.isLoaded)
                     {
-                        Debug.Log($"<color=orange>[Ursa]</color> Replacing Instance: {oldEntry.Scene.name}");
+                        _logger.Log($"<color=orange>[Ursa]</color> Replacing Instance: {oldEntry.Scene.name}");
                         await _sceneLoader.UnloadSceneAsync(oldEntry.Scene);
                     }
                 }

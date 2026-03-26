@@ -70,6 +70,16 @@ public class MySceneParameter : ISceneParameter
 }
 ```
 
+`IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
+バックキーで戻れないオーバーレイ表示などに使います。
+
+```csharp
+public class OverlayParameter : ISceneParameter
+{
+    bool ISceneParameter.IsHistory => false; // 履歴に残さない
+}
+```
+
 ### 2. シーンクラスの定義
 
 #### 戻り値なし（一方通行の画面遷移）
@@ -147,17 +157,48 @@ await UrsaCore.Scene.ReplaceAsync<NextScene>(new NextSceneParameter());
 await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 ```
 
+### JumpTo（履歴内の指定シーンまで一気に戻る）
+
+履歴スタック内で最も直近にある型のシーンまで、間にある全シーンを Pop して戻ります。
+対象の型が見つからない場合は `InvalidOperationException` をスローします。
+
+```csharp
+await UrsaCore.Scene.JumpToAsync<GameScene>();
+```
+
+インデックス（0が最も古い）でも指定できます。範囲外は `ArgumentOutOfRangeException` をスローします。
+
+```csharp
+await UrsaCore.Scene.JumpToIndexAsync(0); // 最初のシーンまで戻る
+```
+
+### IsTransitioning・History（状態の参照）
+
+```csharp
+// 遷移中かどうか
+if (UrsaCore.Scene.IsTransitioning) return;
+
+// 現在の履歴スタック（0が最も古い）
+foreach (var entry in UrsaCore.Scene.History)
+{
+    Debug.Log($"[{entry.Index}] {entry.SceneName} ({entry.SceneType.Name})");
+}
+```
+
 ---
 
 ## インスタンスベースの操作
 
-シーンをロードしてから、タイミングを制御して Replace することができます。
+シーンをロードしてから、タイミングを制御して Push / Replace することができます。
 
 ```csharp
 // ロード（まだ履歴には積まれない）
 MyScene scene = await UrsaCore.Scene.CreateSceneAsync<MyScene>();
 
-// Replaceして開く
+// Pushして開く（履歴に積む）
+await scene.OpenAsync(new MySceneParameter { Message = "Hello!" });
+
+// または Replace して開く（現在のシーンと入れ替え）
 await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 ```
 
@@ -295,6 +336,34 @@ Scripting Define Symbols に `URSA_DEVELOPER` を追加すると `Ursa/Create Tr
 ```csharp
 UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader()));
 ```
+
+---
+
+## ログのカスタマイズ
+
+`IUrsaLogger` を実装することで、フレームワーク内部のログ出力を差し替えられます。
+
+```csharp
+// デフォルト：Debug.Log / Debug.LogWarning に出力
+UrsaCore.Initialize(new UrsaSceneManager());
+
+// リリースビルドでログを全て抑制
+UrsaCore.Initialize(new UrsaSceneManager(logger: new NullUrsaLogger()));
+
+// 独自のログシステムに流す
+public class MyLogger : IUrsaLogger
+{
+    public void Log(string message) => MyLogSystem.Info(message);
+    public void LogWarning(string message) => MyLogSystem.Warn(message);
+}
+
+UrsaCore.Initialize(new UrsaSceneManager(logger: new MyLogger()));
+```
+
+> **Note:** `NullUrsaLogger` はフレームワーク同梱の空実装です。Addressables と組み合わせる場合は両方指定できます。
+> ```csharp
+> UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader(), new NullUrsaLogger()));
+> ```
 
 ---
 
