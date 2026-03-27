@@ -311,7 +311,7 @@ namespace Ursa.Scenes
                 activeScene.GetRootGameObjects(_rootGameObjectBuffer);
                 foreach (var go in _rootGameObjectBuffer)
                 {
-                    go.GetComponentsInChildren<ISceneBackHandler>(_backHandlerBuffer);
+                    go.GetComponentsInChildren<ISceneBackHandler>(true, _backHandlerBuffer);
                     foreach (var handler in _backHandlerBuffer)
                         handler.OnResumeScene();
                     _backHandlerBuffer.Clear();

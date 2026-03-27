@@ -67,6 +67,17 @@ namespace Ursa.Scenes
             await OnInitializeAsync(parameter);
         }
 
+        /// <summary>
+        /// シーン内の全 GameObject をまとめてアクティブ／非アクティブにします。
+        /// Push で重ねた下のシーンを隠したい場合などに使います。
+        /// 非アクティブにしても OnResumeScene() は正しく呼ばれます。
+        /// </summary>
+        public void SetSceneActive(bool active)
+        {
+            foreach (var go in gameObject.scene.GetRootGameObjects())
+                go.SetActive(active);
+        }
+
         protected virtual void OnDestroy()
         {
             var unloader = this.CurrentParam as ISceneResourceUnloader;

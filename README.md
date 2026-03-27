@@ -413,3 +413,25 @@ UrsaCore.Initialize(new UrsaSceneManager(logger: new MyLogger()));
 | `OnDestroy()` | `protected virtual` | GameObjectが破棄される時（Unity） |
 
 > `ReplaceAsync` / `CloseAsync` はコマンドメソッドのため override 不可です。
+
+---
+
+## シーン全体の表示・非表示
+
+`SetSceneActive(bool)` でシーン内の全 GameObject をまとめて切り替えられます。
+Push で上に重ねた下のシーンの描画コストを省きたい場合などに使います。
+
+```csharp
+// 上にシーンを重ねるタイミングで自分を隠す
+await UrsaCore.Scene.PushAsync<NextScene>(new NextScene.Parameter());
+SetSceneActive(false);
+
+// 前面シーンが閉じて戻ってきたら再表示
+public override void OnResumeScene()
+{
+    base.OnResumeScene();
+    SetSceneActive(true);
+}
+```
+
+> 非アクティブにしても `OnResumeScene()` は正しく呼ばれます。
