@@ -42,7 +42,11 @@ namespace Ursa.Scenes
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
             _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
+#if URSA_LOG
             _logger = logger ?? new UnityDebugLogger();
+#else
+            _logger = logger ?? new NullUrsaLogger();
+#endif
         }
 
         /// <inheritdoc />

@@ -377,28 +377,27 @@ UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader()));
 
 ## ログのカスタマイズ
 
-`IUrsaLogger` を実装することで、フレームワーク内部のログ出力を差し替えられます。
+デフォルトではログは出力されません。Scripting Define Symbols に `URSA_LOG` を追加すると有効になります。
+
+```
+Project Settings → Player → Scripting Define Symbols → URSA_LOG を追加
+```
+
+`IUrsaLogger` を実装することで独自のログシステムに流すこともできます。
 
 ```csharp
-// デフォルト：Debug.Log / Debug.LogWarning に出力
-UrsaCore.Initialize(new UrsaSceneManager());
-
-// リリースビルドでログを全て抑制
-UrsaCore.Initialize(new UrsaSceneManager(logger: new NullUrsaLogger()));
-
-// 独自のログシステムに流す
 public class MyLogger : IUrsaLogger
 {
-    public void Log(string message) => MyLogSystem.Info(message);
+    public void Log(string message)        => MyLogSystem.Info(message);
     public void LogWarning(string message) => MyLogSystem.Warn(message);
 }
 
 UrsaCore.Initialize(new UrsaSceneManager(logger: new MyLogger()));
 ```
 
-> **Note:** `NullUrsaLogger` はフレームワーク同梱の空実装です。Addressables と組み合わせる場合は両方指定できます。
+> **Note:** Addressables と組み合わせる場合は両方指定できます。
 > ```csharp
-> UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader(), new NullUrsaLogger()));
+> UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader(), new MyLogger()));
 > ```
 
 ---
