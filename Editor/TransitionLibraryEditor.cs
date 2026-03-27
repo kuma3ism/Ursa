@@ -3,14 +3,14 @@ using UnityEngine;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Ursa.Transitions.Editor
 {
     [CustomEditor(typeof(TransitionLibrary))]
     public class TransitionLibraryEditor : UnityEditor.Editor
     {
-        private const string EnumFilePath = "Assets/Ursa/Runtime/Transitions/TransitionType.cs";
+        private const string EnumFileRelativePath = "Ursa/Runtime/Transitions/TransitionType.cs";
 
         public override void OnInspectorGUI()
         {
@@ -27,14 +27,20 @@ namespace Ursa.Transitions.Editor
         private void GenerateEnum()
         {
             var library = (TransitionLibrary)target;
-            
+
             // 登録されている名前を正規化して収集
             var names = new List<string> { "Default" };
             foreach (var entry in library.Entries)
             {
                 if (!string.IsNullOrEmpty(entry.Name))
                 {
-                    names.Add(entry.Name);
+                    // スペースや記号をアンダースコアに置換し、先頭が数字の場合はプレフィックスを付ける
+                    string safeName = Regex.Replace(entry.Name, @"[^a-zA-Z0-9_]", "_");
+                    if (safeName.Length > 0 && char.IsDigit(safeName[0]))
+                        safeName = "_" + safeName;
+
+                    if (!string.IsNullOrEmpty(safeName))
+                        names.Add(safeName);
                 }
             }
 
@@ -60,10 +66,12 @@ namespace Ursa.Transitions.Editor
 
             try
             {
-                string fullPath = Path.Combine(UnityEngine.Application.dataPath, "..", EnumFilePath).Replace("\\", "/");
+                // Application.dataPath は "<project>/Assets" を返すため、直接結合する
+                string fullPath = Path.Combine(UnityEngine.Application.dataPath, EnumFileRelativePath).Replace("\\", "/");
+                string assetPath = "Assets/" + EnumFileRelativePath;
                 File.WriteAllText(fullPath, sb.ToString());
                 AssetDatabase.Refresh();
-                Debug.Log($"<color=cyan>[Ursa]</color> Generated TransitionType enum at: {EnumFilePath}");
+                Debug.Log($"<color=cyan>[Ursa]</color> Generated TransitionType enum at: {assetPath}");
             }
             catch (System.Exception e)
             {

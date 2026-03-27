@@ -413,6 +413,8 @@ namespace Ursa.Scenes
 
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
+        /// トランジション演出は未対応のため、transitionType を指定しても無視されます。
+        /// 演出が必要な場合は別途 ExecuteTransitionAsync でラップする拡張を検討してください。
         /// </summary>
         public Task PushInstanceAsync(Scene scene, TransitionType transitionType = TransitionType.Default)
         {
@@ -422,11 +424,12 @@ namespace Ursa.Scenes
                 return Task.CompletedTask;
             }
 
+            if (transitionType != TransitionType.Default)
+                _logger.LogWarning("[Ursa] PushInstanceAsync はトランジション演出に未対応です。transitionType は無視されます。");
+
             if (_history.Count == 0) RegisterInitialScene();
             PushHistory(scene, null);
             return Task.CompletedTask;
-            // Note: Currently PushInstanceAsync doesn't support transition because it's additive and usually immediate.
-            // If transition is needed, we should wrap PushHistory in ExecuteTransitionAsync.
         }
 
         /// <summary>
