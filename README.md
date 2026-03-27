@@ -27,10 +27,36 @@ https://github.com/kuma3ism/Ursa.git
 
 | 項目 | 説明 |
 |---|---|
-| Feature Name | 機能名（フォルダ名・クラス名になる） |
-| Namespace | デフォルトは Root Folder から自動生成（例: `Game` → `Game`） |
+| Top Domain | ルートとなるドメイン名（必須）。例: `Game` |
+| Sub Domain | サブドメイン名（省略可）。例: `Gacha` |
+| Namespace | Top + Sub から自動生成。手動入力で上書きも可 |
 | With Result | `SceneBaseWithResult<TParam, TResult>` 版を生成 |
 | Register to Build Settings | Build Settings に自動登録 |
+| Scene Name | クラス名・ファイル名になる（必須）。例: `GachaTop` |
+
+入力例と生成されるパス：
+
+```
+Top Domain : Game
+Sub Domain : Gacha
+Scene Name : GachaTop
+↓
+Assets/Game/Gacha/Scene/GachaTop.unity
+Assets/Game/Gacha/Script/GachaTop.cs
+Namespace  : Game.Gacha
+```
+
+Sub Domain を省略した場合：
+
+```
+Top Domain : Game
+Sub Domain : （空）
+Scene Name : Boot
+↓
+Assets/Game/Scene/Boot.unity
+Assets/Game/Script/Boot.cs
+Namespace  : Game
+```
 
 > **Note:** スクリプトのアタッチはコンパイル完了後に自動実行されます。
 
@@ -157,6 +183,19 @@ await UrsaCore.Scene.ReplaceAsync<NextScene>(new NextSceneParameter());
 await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 ```
 
+### Restart（ゲームを最初からやり直す）
+
+全履歴を破棄してブートシーンを再ロードします。`ResetAsync` と同じ動きですが、意図を明示したい場合に使います。
+パラメーターは渡せないため、ブートシーンがパラメーターを必要としない場合に適しています。
+
+```csharp
+// UrsaCore 経由
+await UrsaCore.Scene.RestartAsync<BootScene>();
+
+// 自前のシングルトンや DI で ISceneManager を持っている場合も同様に呼べます
+await mySceneManager.RestartAsync<BootScene>();
+```
+
 ### JumpTo（履歴内の指定シーンまで一気に戻る）
 
 履歴スタック内で最も直近にある型のシーンまで、間にある全シーンを Pop して戻ります。
@@ -195,10 +234,7 @@ foreach (var entry in UrsaCore.Scene.History)
 // ロード（まだ履歴には積まれない）
 MyScene scene = await UrsaCore.Scene.CreateSceneAsync<MyScene>();
 
-// Pushして開く（履歴に積む）
-await scene.OpenAsync(new MySceneParameter { Message = "Hello!" });
-
-// または Replace して開く（現在のシーンと入れ替え）
+// Replace して開く（現在のシーンと入れ替え）
 await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 ```
 

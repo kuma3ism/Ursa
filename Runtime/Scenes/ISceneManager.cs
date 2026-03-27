@@ -12,6 +12,7 @@ namespace Ursa
     {
         /// <summary>
         /// 全ての履歴を破棄し、指定したシーンを新しいルートとしてロードします。
+        /// ゲームのリスタートにも使えます（パラメーター不要な場合は <see cref="SceneManagerExtensions.RestartAsync{TBootScene}"/> も参照）。
         /// </summary>
         Task ResetAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour;
 
@@ -79,5 +80,23 @@ namespace Ursa
         /// 範囲外の場合は ArgumentOutOfRangeException をスローします。
         /// </summary>
         Task JumpToIndexAsync(int index);
+    }
+
+    /// <summary>
+    /// ISceneManager の拡張メソッド。
+    /// UrsaCore を使わない場合でも任意の ISceneManager 実装から呼び出せます。
+    /// </summary>
+    public static class SceneManagerExtensions
+    {
+        /// <summary>
+        /// ゲームのリスタートに使えます。
+        /// 全履歴を破棄し、指定したシーンを新しいルートとして読み込みます。
+        /// パラメーターなしで <see cref="ISceneManager.ResetAsync{TScene}"/> を呼ぶショートハンドです。
+        /// </summary>
+        public static Task RestartAsync<TBootScene>(this ISceneManager sceneManager)
+            where TBootScene : MonoBehaviour
+        {
+            return sceneManager.ResetAsync<TBootScene>(null);
+        }
     }
 }

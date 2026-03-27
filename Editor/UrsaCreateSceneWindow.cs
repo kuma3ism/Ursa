@@ -14,14 +14,16 @@ namespace Ursa.Editor
     /// </summary>
     public class UrsaCreateSceneWindow : EditorWindow
     {
-        private string _rootFolder = "Game";
-        private string _featureName = "NewScene";
+        private string _topDomain = "Game";
+        private string _subDomain = "";
         private string _namespace = "";
+        private string _sceneName = "NewScene";
         private bool _withResult = false;
         private bool _registerToBuildSettings = true;
         private bool _namespaceDirty = false;
 
-        private const string PrefKeyRootFolder = "Ursa_RootFolder";
+        private const string PrefKeyTopDomain = "Ursa_TopDomain";
+        private const string PrefKeySubDomain  = "Ursa_SubDomain";
 
         // コンパイル後にスクリプトアタッチするための SessionState キー
         private const string SessionKeyScenePath = "Ursa_PendingScenePath";
@@ -32,57 +34,72 @@ namespace Ursa.Editor
         public static void Open()
         {
             var window = GetWindow<UrsaCreateSceneWindow>(true, "Create Ursa Scene", true);
-            window.minSize = new Vector2(360, 200);
-            window.maxSize = new Vector2(360, 200);
+            window.minSize = new Vector2(380, 240);
+            window.maxSize = new Vector2(380, 320);
             window.Show();
         }
 
         private void OnEnable()
         {
-            _rootFolder = EditorPrefs.GetString(PrefKeyRootFolder, "Game");
+            _topDomain = EditorPrefs.GetString(PrefKeyTopDomain, "Game");
+            _subDomain  = EditorPrefs.GetString(PrefKeySubDomain,  "");
             if (!_namespaceDirty)
-                _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
+                _namespace = BuildDefaultNamespace(_topDomain, _subDomain);
         }
 
         private void OnGUI()
         {
             EditorGUILayout.Space(8);
 
+            // Top Domain
             EditorGUI.BeginChangeCheck();
-            _rootFolder = EditorGUILayout.TextField("Root Folder", _rootFolder);
+            _topDomain = EditorGUILayout.TextField("Top Domain", _topDomain);
             if (EditorGUI.EndChangeCheck())
             {
-                EditorPrefs.SetString(PrefKeyRootFolder, _rootFolder);
+                EditorPrefs.SetString(PrefKeyTopDomain, _topDomain);
                 if (!_namespaceDirty)
-                    _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
+                    _namespace = BuildDefaultNamespace(_topDomain, _subDomain);
             }
 
-            EditorGUILayout.Space(4);
-
+            // Sub Domain
             EditorGUI.BeginChangeCheck();
-            _featureName = EditorGUILayout.TextField("Feature Name", _featureName);
-            if (EditorGUI.EndChangeCheck() && !_namespaceDirty)
-                _namespace = BuildDefaultNamespace(_rootFolder, _featureName);
+            _subDomain = EditorGUILayout.TextField("Sub Domain", _subDomain);
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorPrefs.SetString(PrefKeySubDomain, _subDomain);
+                if (!_namespaceDirty)
+                    _namespace = BuildDefaultNamespace(_topDomain, _subDomain);
+            }
 
+            // Namespace（自動 or 手動）
             EditorGUI.BeginChangeCheck();
             _namespace = EditorGUILayout.TextField("Namespace", _namespace);
             if (EditorGUI.EndChangeCheck())
-                _namespaceDirty = _namespace != BuildDefaultNamespace(_rootFolder, _featureName);
+                _namespaceDirty = _namespace != BuildDefaultNamespace(_topDomain, _subDomain);
 
             EditorGUILayout.Space(4);
             _withResult = EditorGUILayout.Toggle("With Result (戻り値あり)", _withResult);
             _registerToBuildSettings = EditorGUILayout.Toggle("Register to Build Settings", _registerToBuildSettings);
+            EditorGUILayout.Space(4);
+
+            // Scene Name（最後）
+            _sceneName = EditorGUILayout.TextField("Scene Name", _sceneName);
 
             EditorGUILayout.Space(12);
 
-            bool isValid = IsValidIdentifier(_featureName);
-            bool isSameAsNamespace = !string.IsNullOrWhiteSpace(_namespace) && _namespace == _featureName;
-            if (!isValid)
-                EditorGUILayout.HelpBox("Feature Name はC#の識別子として有効な文字列にしてください。", MessageType.Warning);
-            if (isSameAsNamespace)
-                EditorGUILayout.HelpBox("Namespace と Feature Name が同じです。外部から 'Hoge.Hoge' のように参照が冗長になります。Namespace を変えることを推奨します。", MessageType.Warning);
+            // バリデーション
+            bool isValidScene  = IsValidIdentifier(_sceneName);
+            bool isValidTop    = !string.IsNullOrWhiteSpace(_topDomain);
+            bool isSameAsNs    = !string.IsNullOrWhiteSpace(_namespace) && _namespace == _sceneName;
 
-            using (new EditorGUI.DisabledScope(!isValid))
+            if (!isValidTop)
+                EditorGUILayout.HelpBox("Top Domain は必須です。", MessageType.Error);
+            if (!isValidScene)
+                EditorGUILayout.HelpBox("Scene Name は C# の識別子として有効な文字列にしてください。", MessageType.Warning);
+            if (isSameAsNs)
+                EditorGUILayout.HelpBox("Namespace と Scene Name が同じです。外部から 'Hoge.Hoge' のように参照が冗長になります。", MessageType.Warning);
+
+            using (new EditorGUI.DisabledScope(!isValidScene || !isValidTop))
             {
                 if (GUILayout.Button("Create", GUILayout.Height(32)))
                 {
@@ -94,52 +111,52 @@ namespace Ursa.Editor
 
         private void CreateScene()
         {
-            // Assets/ で始まらない場合は自動補正（例: Game → Assets/Game）
-            string root = string.IsNullOrWhiteSpace(_rootFolder) ? "Assets" : _rootFolder.Trim('/');
-            string basePath = root.StartsWith("Assets") ? root : $"Assets/{root}";
-            string featureDir = $"{basePath}/{_featureName}";
+            // Assets/TopDomain/SubDomain/ をベースパスとする
+            string top      = _topDomain.Trim('/');
+            string basePath = top.StartsWith("Assets") ? top : $"Assets/{top}";
+            if (!string.IsNullOrWhiteSpace(_subDomain))
+                basePath = $"{basePath}/{_subDomain.Trim('/')}";
+
+            string scriptDir = $"{basePath}/Script";
+            string sceneDir  = $"{basePath}/Scene";
+
+            // File.WriteAllText 用の絶対パス
+            string projectRoot   = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string absScriptPath = Path.Combine(projectRoot, scriptDir,  $"{_sceneName}.cs");
+            string absPrefabKeep = Path.Combine(projectRoot, basePath,   "Prefab", ".gitkeep");
+            string absTexKeep    = Path.Combine(projectRoot, basePath,   "Texture", ".gitkeep");
+
+            // SaveScene 用のパス
+            string scenePath = $"{sceneDir}/{_sceneName}.unity";
 
             // --- 既存チェック ---
-            if (AssetDatabase.IsValidFolder(featureDir))
+            if (File.Exists(Path.Combine(projectRoot, scenePath)))
             {
                 if (!EditorUtility.DisplayDialog("確認",
-                    $"'{_featureName}' はすでに存在します。上書きしますか？",
+                    $"'{_sceneName}' はすでに存在します。上書きしますか？",
                     "上書き", "キャンセル"))
                     return;
             }
 
-            string scriptDir  = $"{featureDir}/Script";
-            string sceneDir   = $"{featureDir}/Scene";
-
-            // File.WriteAllText 用の絶対パス
-            string projectRoot   = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            string absFeatureDir = Path.Combine(projectRoot, featureDir);
-            string absScriptPath = Path.Combine(projectRoot, scriptDir, $"{_featureName}.cs");
-            string absPrefabKeep = Path.Combine(absFeatureDir, "Prefab", ".gitkeep");
-            string absTexKeep    = Path.Combine(absFeatureDir, "Texture", ".gitkeep");
-
-            // SaveScene 用のパス（Assets/ から始まる相対パス）
-            string scenePath = $"{sceneDir}/{_featureName}.unity";
-
-            // --- フォルダ作成（AssetDatabase経由でRefresh不要）---
-            EnsureFolder(basePath,    _featureName);
-            EnsureFolder(featureDir,  "Script");
-            EnsureFolder(featureDir,  "Scene");
-            EnsureFolder(featureDir,  "Prefab");
-            EnsureFolder(featureDir,  "Texture");
-            // 空フォルダをGitで追跡するための.gitkeep
+            // --- フォルダ作成 ---
+            EnsureFolder(basePath.Substring(0, basePath.LastIndexOf('/')),
+                         basePath.Substring(basePath.LastIndexOf('/') + 1));
+            EnsureFolder(basePath, "Script");
+            EnsureFolder(basePath, "Scene");
+            EnsureFolder(basePath, "Prefab");
+            EnsureFolder(basePath, "Texture");
             File.WriteAllText(absPrefabKeep, "");
             File.WriteAllText(absTexKeep,    "");
 
             // --- C# スクリプト生成 ---
             string scriptContent = _withResult
-                ? GenerateScriptWithResult(_featureName, _namespace)
-                : GenerateScript(_featureName, _namespace);
+                ? GenerateScriptWithResult(_sceneName, _namespace)
+                : GenerateScript(_sceneName, _namespace);
             File.WriteAllText(absScriptPath, scriptContent);
 
             // --- シーン作成 ---
             var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
-            var rootGO = new GameObject(_featureName);
+            var rootGO = new GameObject(_sceneName);
             SceneManager.MoveGameObjectToScene(rootGO, newScene);
 
             // Main Camera
@@ -174,20 +191,18 @@ namespace Ursa.Editor
 
             // --- コンパイル後にスクリプトをアタッチするよう予約 ---
             string fullTypeName = string.IsNullOrWhiteSpace(_namespace)
-                ? _featureName
-                : $"{_namespace}.{_featureName}";
+                ? _sceneName
+                : $"{_namespace}.{_sceneName}";
             SessionState.SetString(SessionKeyScenePath, scenePath);
             SessionState.SetString(SessionKeyTypeName,  fullTypeName);
 
-            // 最後に一度だけ Refresh（コンパイル開始）
             AssetDatabase.Refresh();
-            Debug.Log($"<color=cyan>[Ursa]</color> Scene '{_featureName}' を生成しました → {featureDir}");
+            Debug.Log($"<color=cyan>[Ursa]</color> Scene '{_sceneName}' を生成しました → {basePath}");
         }
 
         /// <summary>フォルダが存在しない場合のみ作成する（中間フォルダも再帰的に作成）</summary>
         private static void EnsureFolder(string parent, string folderName)
         {
-            // 親フォルダも再帰的に保証する
             if (!AssetDatabase.IsValidFolder(parent))
             {
                 int lastSlash = parent.LastIndexOf('/');
@@ -200,31 +215,25 @@ namespace Ursa.Editor
                 AssetDatabase.CreateFolder(parent, folderName);
         }
 
-
         /// <summary>
-        /// コンパイル完了・エディター起動後に呼ばれ、予約されていたスクリプトを
-        /// シーンの GameObject にアタッチして再保存する。
+        /// コンパイル完了後に呼ばれ、予約されていたスクリプトをシーンにアタッチして再保存する。
         /// </summary>
         [InitializeOnLoadMethod]
         private static void TryAttachPendingScript()
         {
-            // 予約がなければ何もしない
-            string scenePath   = SessionState.GetString(SessionKeyScenePath, "");
+            string scenePath    = SessionState.GetString(SessionKeyScenePath, "");
             string fullTypeName = SessionState.GetString(SessionKeyTypeName,  "");
             if (string.IsNullOrEmpty(scenePath)) return;
 
-            // 予約をクリア
             SessionState.EraseString(SessionKeyScenePath);
             SessionState.EraseString(SessionKeyTypeName);
 
-            // コンパイル完了後に実行するよう少し遅らせる
             EditorApplication.delayCall += () => AttachScript(scenePath, fullTypeName);
         }
 
         private static void AttachScript(string scenePath, string fullTypeName)
         {
-            // MonoScript からスクリプトを検索
-            var guids = AssetDatabase.FindAssets($"t:MonoScript");
+            var guids = AssetDatabase.FindAssets("t:MonoScript");
             MonoScript targetScript = null;
             foreach (var guid in guids)
             {
@@ -243,13 +252,12 @@ namespace Ursa.Editor
                 return;
             }
 
-            // シーンを開いて GameObject にアタッチ
             var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
             foreach (var go in scene.GetRootGameObjects())
             {
                 go.AddComponent(targetScript.GetClass());
                 go.AddComponent<TransitionController>();
-                break; // 最初の Root GO にアタッチ
+                break;
             }
             EditorSceneManager.SaveScene(scene);
             EditorSceneManager.CloseScene(scene, true);
@@ -334,28 +342,19 @@ using Ursa.Scenes;
         // ユーティリティ
         // ────────────────────────────────────────────
 
-        private static string GetSelectedFolderPath()
+        /// <summary>Top Domain + Sub Domain からデフォルト Namespace を生成する</summary>
+        private static string BuildDefaultNamespace(string topDomain, string subDomain)
         {
-            string path = AssetDatabase.GetAssetPath(Selection.activeObject);
-            if (string.IsNullOrEmpty(path)) return "Assets";
-            return Directory.Exists(path) ? path : Path.GetDirectoryName(path);
-        }
+            string top = topDomain?.Trim('/') ?? "";
+            if (top.StartsWith("Assets/")) top = top.Substring("Assets/".Length);
+            else if (top == "Assets") top = "";
 
-        /// <summary>Root Folder（例: Assets/Game/UI）からNamespace（例: Game.UI）を生成する</summary>
-        private static string RootFolderToNamespace(string rootFolder)
-        {
-            if (string.IsNullOrWhiteSpace(rootFolder)) return "";
-            string path = rootFolder.Trim('/');
-            if (path.StartsWith("Assets/")) path = path.Substring("Assets/".Length);
-            else if (path == "Assets")          return "";
-            return path.Replace('/', '.');
-        }
+            string sub = subDomain?.Trim('/') ?? "";
 
-        /// <summary>Root Folder + Feature Name を組み合わせたデフォルト Namespace を生成する</summary>
-        private static string BuildDefaultNamespace(string rootFolder, string featureName)
-        {
-            // Root Folder のみを使用（例: Assets/Game → Game）
-            return RootFolderToNamespace(rootFolder);
+            if (string.IsNullOrWhiteSpace(top) && string.IsNullOrWhiteSpace(sub)) return "";
+            if (string.IsNullOrWhiteSpace(sub)) return top;
+            if (string.IsNullOrWhiteSpace(top)) return sub;
+            return $"{top}.{sub}";
         }
 
         private static bool IsValidIdentifier(string name)
