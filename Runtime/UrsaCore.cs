@@ -1,6 +1,5 @@
-using System;
-using System.Threading.Tasks;
 using UnityEngine;
+using Ursa.Transitions;
 
 namespace Ursa
 {
@@ -40,6 +39,8 @@ namespace Ursa
 
         public static ISceneManager Scene =>
             _scene ?? throw new InvalidOperationException("UrsaCore is not initialized.");
+
+        public static TransitionLibrary TransitionLibrary { get; set; }
 
         public static bool IsReady => _scene != null;
 
