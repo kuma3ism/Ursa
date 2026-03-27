@@ -373,6 +373,14 @@ Scripting Define Symbols に `URSA_DEVELOPER` を追加すると `Ursa/Create Tr
 UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader()));
 ```
 
+### エディターでの Build Settings 不要ロード
+
+エディター上では `EditorSceneLoader` が自動登録されるため、Build Settings へのシーン登録なしにロードできます。
+`UrsaCore.Initialize(new UrsaSceneManager())` だけで動作します。
+
+> **Note:** 同名シーンが複数存在する場合は最初に見つかったものがロードされ、警告が出ます。
+> ビルド時は通常の `BuildSettingsSceneLoader` が使われます。
+
 ---
 
 ## ログのカスタマイズ

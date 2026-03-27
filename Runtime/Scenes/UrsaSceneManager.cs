@@ -32,6 +32,13 @@ namespace Ursa.Scenes
         // 履歴スタック（index 0 が最も古い = bottom）
         private List<SceneHistoryEntry> _history = new List<SceneHistoryEntry>();
 
+        /// <summary>
+        /// エディター上でのみ使用されるデフォルトの ISceneLoader。
+        /// Ursa.Editor の EditorSceneLoaderInstaller が InitializeOnLoad で自動登録します。
+        /// ユーザーが明示的にローダーを渡した場合はそちらが優先されます。
+        /// </summary>
+        public static ISceneLoader DefaultEditorLoader { get; set; }
+
         private readonly ISceneLoader _sceneLoader;
         private readonly IUrsaLogger _logger;
 
@@ -41,7 +48,7 @@ namespace Ursa.Scenes
 
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
-            _sceneLoader = sceneLoader ?? new BuildSettingsSceneLoader();
+            _sceneLoader = sceneLoader ?? DefaultEditorLoader ?? new BuildSettingsSceneLoader();
 #if URSA_LOG
             _logger = logger ?? new UnityDebugLogger();
 #else
