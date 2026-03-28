@@ -287,17 +287,12 @@ using Ursa.Scenes;
 
 {i}    protected override async Task OnInitializeAsync(Parameter parameter)
 {i}    {{
-{i}        await base.OnInitializeAsync(parameter);
+{i}        await Task.CompletedTask;
 {i}    }}
 
-{i}    public override void OnResumeScene()
+{i}    protected override async Task OnBackKeyPressed()
 {i}    {{
-{i}        base.OnResumeScene();
-{i}    }}
-
-{i}    protected override void OnBackKeyPressed()
-{i}    {{
-{i}        _ = CloseAsync();
+{i}        await CloseAsync();
 {i}    }}
 {i}}}
 {nsClose}";
@@ -322,17 +317,12 @@ using Ursa.Scenes;
 
 {i}    protected override async Task OnInitializeAsync(Parameter parameter)
 {i}    {{
-{i}        await base.OnInitializeAsync(parameter);
+{i}        await Task.CompletedTask;
 {i}    }}
 
-{i}    public override void OnResumeScene()
+{i}    protected override async Task OnBackKeyPressed()
 {i}    {{
-{i}        base.OnResumeScene();
-{i}    }}
-
-{i}    protected override void OnBackKeyPressed()
-{i}    {{
-{i}        _ = CloseAsync(default);
+{i}        await CloseAsync(default);
 {i}    }}
 {i}}}
 {nsClose}";
