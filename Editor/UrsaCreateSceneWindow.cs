@@ -288,6 +288,10 @@ using Ursa.Scenes;
 {i}        await Task.CompletedTask;
 {i}    }}
 
+{i}    public override void OnResumeScene()
+{i}    {{
+{i}    }}
+
 {i}    protected override async Task OnBackKeyPressed()
 {i}    {{
 {i}        await CloseAsync();
@@ -316,6 +320,10 @@ using Ursa.Scenes;
 {i}    protected override async Task OnInitializeAsync(Parameter parameter)
 {i}    {{
 {i}        await Task.CompletedTask;
+{i}    }}
+
+{i}    public override void OnResumeScene()
+{i}    {{
 {i}    }}
 
 {i}    protected override async Task OnBackKeyPressed()
