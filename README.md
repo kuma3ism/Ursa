@@ -243,9 +243,21 @@ await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 ## 戻り値を受け取る（ポップアップ待機）
 
 ```csharp
-var result = await UrsaCore.Scene.OpenResultAsync<MyScene, MySceneParameter, MySceneResult>(param);
-Debug.Log(result.IsConfirmed);
+try
+{
+    var result = await UrsaCore.Scene.OpenResultAsync<MyScene, MySceneParameter, MySceneResult>(param);
+    Debug.Log(result.IsConfirmed);
+}
+catch (OperationCanceledException)
+{
+    // Replace・JumpTo 等でシーンが正常終了せずに破棄された場合にここに来る
+    // CloseAsync(result) を経由せず破棄された場合のみスローされる
+}
 ```
+
+> **Note:** `OperationCanceledException` がスローされるのは、Replace や JumpTo などで
+> `CloseAsync(result)` を経由せずシーンが破棄された場合のみです。
+> バックキーによるキャンセルは `CloseAsync(default)` 経由のため、通常は `catch` に入りません。
 
 ---
 
@@ -258,7 +270,6 @@ Debug.Log(result.IsConfirmed);
 ```csharp
 public override void OnResumeScene()
 {
-    base.OnResumeScene();
     // 再表示時の処理（リスト再取得など）
 }
 ```
@@ -270,9 +281,9 @@ public override void OnResumeScene()
 ```csharp
 // デフォルト動作: CloseAsync() が呼ばれる
 // カスタマイズしたい場合はオーバーライド:
-protected override void OnBackKeyPressed()
+protected override async Task OnBackKeyPressed()
 {
-    _ = CloseAsync(new MySceneResult { IsConfirmed = false }); // 戻り値ありの場合
+    await CloseAsync(new MySceneResult { IsConfirmed = false }); // 戻り値ありの場合
 }
 ```
 
@@ -416,7 +427,7 @@ UrsaCore.Initialize(new UrsaSceneManager(logger: new MyLogger()));
 |---|---|---|
 | `OnInitializeAsync(T)` | `protected virtual` | シーン入場時（パラメーター注入後） |
 | `OnResumeScene()` | `public virtual` | 前面シーンが閉じて自分が最前面に戻った時 |
-| `OnBackKeyPressed()` | `protected virtual` | バックキー（Escape）押下時 |
+| `OnBackKeyPressed()` | `protected virtual async Task` | バックキー（Escape）押下時 |
 | `OnDestroy()` | `protected virtual` | GameObjectが破棄される時（Unity） |
 
 > `ReplaceAsync` / `CloseAsync` はコマンドメソッドのため override 不可です。
@@ -436,7 +447,6 @@ SetSceneActive(false);
 // 前面シーンが閉じて戻ってきたら再表示
 public override void OnResumeScene()
 {
-    base.OnResumeScene();
     SetSceneActive(true);
 }
 ```
