@@ -41,7 +41,21 @@ namespace Ursa
         public static ISceneManager Scene =>
             _scene ?? throw new InvalidOperationException("UrsaCore is not initialized.");
 
-        public static TransitionLibrary TransitionLibrary { get; set; }
+        private static UrsaSettings _settings;
+
+        public static UrsaSettings Settings
+        {
+            get
+            {
+                // 手動でセットされていなければ、裏で自動生成・保存されているマスタデータをロードする
+                if (_settings == null)
+                {
+                    _settings = UrsaSettings.Instance;
+                }
+                return _settings;
+            }
+            set => _settings = value;
+        }
 
         public static bool IsReady => _scene != null;
 

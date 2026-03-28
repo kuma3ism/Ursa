@@ -29,6 +29,7 @@ namespace Ursa.Transitions
         }
 
         private TransitionController _controller;
+        private TransitionEffectBase _directEffect;
         private CanvasGroup _canvasGroup;
 
         private void Awake()
@@ -64,17 +65,25 @@ namespace Ursa.Transitions
             _controller = controller;
         }
 
+        /// <summary>
+        /// ライブラリ等から生成したエフェクトそのものを直接適用します。
+        /// </summary>
+        public void ApplyEffect(TransitionEffectBase effect)
+        {
+            _directEffect = effect;
+        }
+
         // ── ITransitionEffect ─────────────────────────────────
 
         public async Task PlayOutAsync()
         {
-            var effect = _controller?.Effect;
+            var effect = _directEffect != null ? _directEffect : _controller?.Effect;
             if (effect != null) await effect.PlayOutAsync();
         }
 
         public async Task PlayInAsync()
         {
-            var effect = _controller?.Effect;
+            var effect = _directEffect != null ? _directEffect : _controller?.Effect;
             if (effect != null) await effect.PlayInAsync();
         }
     }

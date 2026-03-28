@@ -1,11 +1,16 @@
 namespace Ursa.Transitions
 {
     /// <summary>
-    /// 自動生成されるトランジションタイプ Enum。
-    /// TransitionLibrary の内容に合わせてエディター拡張によって更新されます。
+    /// 基本的なトランジションタイプ Enum。
+    /// （ユーザーが独自で拡張する場合は、手動で追加するか別機構を用いる）
     /// </summary>
     public enum TransitionType
     {
-        Default
+        Default,
+        Fade,
+        Wipe,
+        Circle,
+        Dissolve,
+        Animator
     }
 }

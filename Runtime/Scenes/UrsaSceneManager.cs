@@ -62,26 +62,34 @@ namespace Ursa.Scenes
         // 遷移フラグ管理を共通化（TransitionCanvas のシングルトンを使用）
         private async Task ExecuteTransitionAsync(Func<Task> action, TransitionType transitionType = TransitionType.Default)
         {
-            TransitionController manualController = null;
-            bool shouldDestroyController = false;
+            TransitionEffectBase manualEffect = null;
+            bool shouldDestroyEffect = false;
 
             if (transitionType != TransitionType.Default)
             {
-                var library = UrsaCore.TransitionLibrary;
-                if (library != null)
+                var settings = UrsaCore.Settings;
+                if (settings != null)
                 {
-                    var prefab = library.GetPrefab(transitionType);
+                    var prefab = settings.GetTransitionPrefab(transitionType);
                     if (prefab != null)
                     {
-                        manualController = UnityEngine.Object.Instantiate(prefab);
-                        shouldDestroyController = true;
+                        manualEffect = UnityEngine.Object.Instantiate(prefab);
+                        shouldDestroyEffect = true;
                     }
                 }
             }
 
-            var controller = manualController ?? GetActiveController();
-            var canvas = controller != null ? TransitionCanvas.EnsureInstance() : null;
-            canvas?.ApplyController(controller);
+            // マニュアル指定のエフェクトが優先。無ければシーンにある TransitionController を探す
+            var canvas = TransitionCanvas.EnsureInstance();
+            if (manualEffect != null)
+            {
+                canvas.ApplyEffect(manualEffect);
+            }
+            else
+            {
+                var controller = GetActiveController();
+                canvas.ApplyController(controller);
+            }
 
             _isTransitioning = true;
             try
@@ -93,9 +101,9 @@ namespace Ursa.Scenes
             finally
             {
                 _isTransitioning = false;
-                if (shouldDestroyController && manualController != null)
+                if (shouldDestroyEffect && manualEffect != null)
                 {
-                    UnityEngine.Object.Destroy(manualController.gameObject);
+                    UnityEngine.Object.Destroy(manualEffect.gameObject);
                 }
             }
         }
