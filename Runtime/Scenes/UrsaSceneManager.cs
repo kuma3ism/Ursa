@@ -60,11 +60,36 @@ namespace Ursa.Scenes
         public IReadOnlyList<ISceneHistoryEntry> History => _history;
 
         // 遷移フラグ管理を共通化（TransitionCanvas のシングルトンを使用）
-        private async Task ExecuteTransitionAsync(Func<Task> action)
+        private async Task ExecuteTransitionAsync(Func<Task> action, TransitionType transitionType = TransitionType.Default)
         {
-            var controller = GetActiveController();
-            var canvas = controller != null ? TransitionCanvas.EnsureInstance() : null;
-            canvas?.ApplyController(controller);
+            TransitionEffectBase manualEffect = null;
+            bool shouldDestroyEffect = false;
+
+            if (transitionType != TransitionType.Default)
+            {
+                var settings = UrsaCore.Settings;
+                if (settings != null)
+                {
+                    var prefab = settings.GetTransitionPrefab(transitionType);
+                    if (prefab != null)
+                    {
+                        manualEffect = UnityEngine.Object.Instantiate(prefab);
+                        shouldDestroyEffect = true;
+                    }
+                }
+            }
+
+            // マニュアル指定のエフェクトが優先。無ければシーンにある TransitionController を探す
+            var canvas = TransitionCanvas.EnsureInstance();
+            if (manualEffect != null)
+            {
+                canvas.ApplyEffect(manualEffect);
+            }
+            else
+            {
+                var controller = GetActiveController();
+                canvas.ApplyController(controller);
+            }
 
             _isTransitioning = true;
             try
@@ -73,7 +98,14 @@ namespace Ursa.Scenes
                 await action();
                 if (canvas != null) await canvas.PlayInAsync();
             }
-            finally { _isTransitioning = false; }
+            finally
+            {
+                _isTransitioning = false;
+                if (shouldDestroyEffect && manualEffect != null)
+                {
+                    UnityEngine.Object.Destroy(manualEffect.gameObject);
+                }
+            }
         }
 
         // 現在最前面のシーンから TransitionController を取得（なければ null）
@@ -102,7 +134,7 @@ namespace Ursa.Scenes
         /// <summary>
         /// 全履歴を捨てて、新しいシーンへ遷移 (Single)
         /// </summary>
-        public async Task ResetAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
+        public async Task ResetAsync<TScene>(ISceneParameter parameter, TransitionType transitionType = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -111,14 +143,14 @@ namespace Ursa.Scenes
             }
 
             _history.Clear();
-            await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Single);
+            await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Single, transitionType);
         }
 
         /// <summary>
         /// 現在のシーンの上に重ねる (Additive)
         /// パラメーターの IsHistory が false の場合、履歴には積まれません。
         /// </summary>
-        public async Task PushAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
+        public async Task PushAsync<TScene>(ISceneParameter parameter, TransitionType transitionType = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -127,13 +159,13 @@ namespace Ursa.Scenes
             }
 
             if (_history.Count == 0) RegisterInitialScene();
-            await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Additive);
+            await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Additive, transitionType);
         }
 
         /// <summary>
         /// 現在の最前面シーンを捨てて、新しいシーンに入れ替える
         /// </summary>
-        public async Task ReplaceAsync<TScene>(ISceneParameter parameter) where TScene : MonoBehaviour
+        public async Task ReplaceAsync<TScene>(ISceneParameter parameter, TransitionType transitionType = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -168,13 +200,13 @@ namespace Ursa.Scenes
                     PushHistory(newlyLoadedScene, typeof(TScene));
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
-            });
+            }, transitionType);
         }
 
         /// <summary>
         /// 一つ前のシーンに戻る
         /// </summary>
-        public async Task PopAsync()
+        public async Task PopAsync(TransitionType transitionType = TransitionType.Default)
         {
             if (_isTransitioning || _history.Count <= 1)
             {
@@ -192,14 +224,14 @@ namespace Ursa.Scenes
                     await _sceneLoader.UnloadSceneAsync(entry.Scene);
                 }
                 NotifyBackToScene();
-            });
+            }, transitionType);
         }
 
         /// <summary>
         /// 履歴内で最も直近にある TScene 型のシーンまで一気にPopします。
         /// 対象が見つからない場合は InvalidOperationException をスローします。
         /// </summary>
-        public async Task JumpToAsync<TScene>() where TScene : MonoBehaviour
+        public async Task JumpToAsync<TScene>(TransitionType transitionType = TransitionType.Default) where TScene : MonoBehaviour
         {
             var targetType = typeof(TScene);
 
@@ -218,14 +250,14 @@ namespace Ursa.Scenes
                 throw new InvalidOperationException(
                     $"[Ursa] JumpToAsync: 履歴に {targetType.Name} が見つかりませんでした。");
 
-            await JumpToIndexAsync(targetIndex);
+            await JumpToIndexAsync(targetIndex, transitionType);
         }
 
         /// <summary>
         /// 指定インデックスのシーンまで一気にPopします（インデックス0が最も古い）。
         /// 範囲外の場合は ArgumentOutOfRangeException をスローします。
         /// </summary>
-        public async Task JumpToIndexAsync(int index)
+        public async Task JumpToIndexAsync(int index, TransitionType transitionType = TransitionType.Default)
         {
             if (index < 0 || index >= _history.Count)
                 throw new ArgumentOutOfRangeException(nameof(index),
@@ -251,10 +283,10 @@ namespace Ursa.Scenes
                     }
                 }
                 NotifyBackToScene();
-            });
+            }, transitionType);
         }
 
-        private async Task InternalLoad(string sceneName, Type sceneType, ISceneParameter parameter, LoadSceneMode mode)
+        private async Task InternalLoad(string sceneName, Type sceneType, ISceneParameter parameter, LoadSceneMode mode, TransitionType transitionType = TransitionType.Default)
         {
             await ExecuteTransitionAsync(async () =>
             {
@@ -275,7 +307,7 @@ namespace Ursa.Scenes
 
                 if (parameter != null)
                     await InjectParameterToScene(newlyLoadedScene, parameter);
-            });
+            }, transitionType);
         }
 
         private void PushHistory(Scene scene, Type sceneType)
@@ -341,7 +373,7 @@ namespace Ursa.Scenes
         /// 指定したシーンをロード（Additive）し、対象となるTSceneコンポーネントのインスタンスを検索して返します。
         /// ロードされた時点では履歴スタックへの追加はまだ行われません。
         /// </summary>
-        public async Task<TScene> CreateSceneAsync<TScene>(ISceneParameter parameter = null) where TScene : MonoBehaviour
+        public async Task<TScene> CreateSceneAsync<TScene>(ISceneParameter parameter = null, TransitionType transitionType = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -382,21 +414,26 @@ namespace Ursa.Scenes
                 _rootGameObjectBuffer.Clear();
 
                 _logger.LogWarning($"[Ursa] {sceneName} シーンから {typeof(TScene).Name} が見つかりませんでした。");
-            });
+            }, transitionType);
 
             return result;
         }
 
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
+        /// トランジション演出は未対応のため、transitionType を指定しても無視されます。
+        /// 演出が必要な場合は別途 ExecuteTransitionAsync でラップする拡張を検討してください。
         /// </summary>
-        public Task PushInstanceAsync(Scene scene)
+        public Task PushInstanceAsync(Scene scene, TransitionType transitionType = TransitionType.Default)
         {
             if (_isTransitioning)
             {
                 _logger.LogWarning("[Ursa] 遷移中のため、PushInstanceAsync 要求を無視しました。");
                 return Task.CompletedTask;
             }
+
+            if (transitionType != TransitionType.Default)
+                _logger.LogWarning("[Ursa] PushInstanceAsync はトランジション演出に未対応です。transitionType は無視されます。");
 
             if (_history.Count == 0) RegisterInitialScene();
             PushHistory(scene, null);
@@ -406,7 +443,7 @@ namespace Ursa.Scenes
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の最前面のシーンと入れ替え（Replace）て履歴を更新します。
         /// </summary>
-        public async Task ReplaceInstanceAsync(Scene scene)
+        public async Task ReplaceInstanceAsync(Scene scene, TransitionType transitionType = TransitionType.Default)
         {
             if (_isTransitioning)
             {
@@ -427,18 +464,18 @@ namespace Ursa.Scenes
                     }
                 }
                 PushHistory(scene, null);
-            });
+            }, transitionType);
         }
 
         /// <summary>
         /// 対象のシーンをロードし、パラメーターを渡して開いた上で、
         /// そのシーンが閉じられて結果が返ってくるまで待機して値を返します。
         /// </summary>
-        public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter)
+        public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter, TransitionType transitionType = TransitionType.Default)
             where TScene : SceneBaseWithResult<TParam, TResult>
             where TParam : ISceneParameter
         {
-            var sceneInstance = await CreateSceneAsync<TScene>(parameter);
+            var sceneInstance = await CreateSceneAsync<TScene>(parameter, transitionType);
             if (sceneInstance == null) return default;
 
             await sceneInstance.OpenAsync(parameter);
