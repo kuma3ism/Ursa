@@ -105,7 +105,7 @@ namespace Ursa.Scenes
             if (!_handleBackKey || !IsTopScene) return;
             if (UrsaCore.Scene?.IsTransitioning == true) return;
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-                OnBackKeyPressed();
+                _ = OnBackKeyPressed();
         }
 
         /// <summary>
@@ -113,9 +113,9 @@ namespace Ursa.Scenes
         /// デフォルトでは CloseAsync() を呼び出します。
         /// 必要に応じてサブクラスでオーバーライドしてください。
         /// </summary>
-        protected virtual void OnBackKeyPressed()
+        protected virtual async Task OnBackKeyPressed()
         {
-            _ = CloseAsync();
+            await CloseAsync();
         }
     }
 
@@ -173,9 +173,9 @@ namespace Ursa.Scenes
         /// Androidのバックキーによるキャンセル時は default(TResult) で閉じます。
         /// キャンセル時の戻り値を変えたい場合はオーバーライドしてください。
         /// </summary>
-        protected override void OnBackKeyPressed()
+        protected override async Task OnBackKeyPressed()
         {
-            _ = CloseAsync();
+            await CloseAsync();
         }
     }
 }
