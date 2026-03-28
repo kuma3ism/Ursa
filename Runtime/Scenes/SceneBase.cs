@@ -139,6 +139,16 @@ namespace Ursa.Scenes
         }
 
         /// <summary>
+        /// Replace・Jump などで <c>CloseAsync(result)</c> を経由せずシーンが破棄された場合に
+        /// <c>WaitForResultAsync()</c> の待機側へ <c>OperationCanceledException</c> を通知します。
+        /// </summary>
+        protected override void OnDestroy()
+        {
+            _tcs?.TrySetCanceled();
+            base.OnDestroy();
+        }
+
+        /// <summary>
         /// 引数なしで閉じる場合も default(TResult) をセットして正しく閉じます。
         /// </summary>
         public new async Task CloseAsync()
@@ -160,6 +170,7 @@ namespace Ursa.Scenes
         /// このシーンが閉じられ、結果が返ってくるまで待機します。
         /// （呼び出し元のシーンが「結果を待つ」アクションとして呼び出します）
         /// 必ず OpenAsync() を呼んだ後に使用してください。
+        /// Replace・Jump 等で中断された場合は <c>OperationCanceledException</c> がスローされます。
         /// </summary>
         public Task<TResult> WaitForResultAsync()
         {
