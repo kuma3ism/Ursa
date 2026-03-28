@@ -4,7 +4,6 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
-using Ursa.Transitions;
 
 namespace Ursa.Editor
 {
@@ -256,7 +255,6 @@ namespace Ursa.Editor
             foreach (var go in scene.GetRootGameObjects())
             {
                 go.AddComponent(targetScript.GetClass());
-                go.AddComponent<TransitionController>();
                 break;
             }
             EditorSceneManager.SaveScene(scene);
