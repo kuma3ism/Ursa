@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 using UnityEngine;
 using Ursa.Transitions;
 
@@ -42,24 +41,19 @@ namespace Ursa
         public static ISceneManager Scene =>
             _scene ?? throw new InvalidOperationException("UrsaCore is not initialized.");
 
-        /// <summary>
-        /// トランジションプレハブのライブラリ。Initialize() 内で設定してください。
-        /// </summary>
-        public static TransitionLibrary TransitionLibrary { get; private set; }
+        public static TransitionLibrary TransitionLibrary { get; set; }
 
         public static bool IsReady => _scene != null;
 
-        public static void Initialize(ISceneManager sceneManager, TransitionLibrary transitionLibrary = null)
+        public static void Initialize(ISceneManager sceneManager)
         {
             if (_scene != null) Dispose(); // エディタ再Play時の再初期化を許容
             _scene = sceneManager ?? throw new ArgumentNullException(nameof(sceneManager));
-            TransitionLibrary = transitionLibrary;
         }
 
         public static void Dispose()
         {
             _scene = null;
-            TransitionLibrary = null;
         }
     }
 
