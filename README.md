@@ -115,7 +115,7 @@ public class MyScene : SceneBase<MySceneParameter>
 {
     protected override async Task OnInitializeAsync(MySceneParameter parameter)
     {
-        // パラメーターを使った初期化処理（CurrentParam もここから使える）
+        // この時点で PreloadResourcesAsync は完了済み
         Debug.Log(parameter.Message);
         await Task.CompletedTask;
     }
@@ -125,13 +125,6 @@ public class MyScene : SceneBase<MySceneParameter>
 #### 戻り値あり（ポップアップ・確認ダイアログなど）
 
 ```csharp
-// 戻り値の型を定義
-public class MySceneResult
-{
-    public bool IsConfirmed;
-    public string Message;
-}
-
 public class MyScene : SceneBaseWithResult<MySceneParameter, MySceneResult>
 {
     protected override async Task OnInitializeAsync(MySceneParameter parameter)
@@ -140,7 +133,6 @@ public class MyScene : SceneBaseWithResult<MySceneParameter, MySceneResult>
         await Task.CompletedTask;
     }
 
-    // 結果を返して閉じる（シーン自身から呼ぶ）
     async void OnConfirmButton()
     {
         await CloseAsync(new MySceneResult { IsConfirmed = true });
@@ -185,15 +177,10 @@ await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 
 ### Restart（ゲームを最初からやり直す）
 
-全履歴を破棄してブートシーンを再ロードします。`ResetAsync` と同じ動きですが、意図を明示したい場合に使います。
-パラメーターは渡せないため、ブートシーンがパラメーターを必要としない場合に適しています。
+全履歴を破棄してブートシーンを再ロードします。パラメーターなしで `ResetAsync` を呼ぶショートハンドです。
 
 ```csharp
-// UrsaCore 経由
 await UrsaCore.Scene.RestartAsync<BootScene>();
-
-// 自前のシングルトンや DI で ISceneManager を持っている場合も同様に呼べます
-await mySceneManager.RestartAsync<BootScene>();
 ```
 
 ### JumpTo（履歴内の指定シーンまで一気に戻る）
@@ -208,20 +195,16 @@ await UrsaCore.Scene.JumpToAsync<GameScene>();
 インデックス（0が最も古い）でも指定できます。範囲外は `ArgumentOutOfRangeException` をスローします。
 
 ```csharp
-await UrsaCore.Scene.JumpToIndexAsync(0); // 最初のシーンまで戻る
+await UrsaCore.Scene.JumpToIndexAsync(0);
 ```
 
 ### IsTransitioning・History（状態の参照）
 
 ```csharp
-// 遷移中かどうか
 if (UrsaCore.Scene.IsTransitioning) return;
 
-// 現在の履歴スタック（0が最も古い）
 foreach (var entry in UrsaCore.Scene.History)
-{
     Debug.Log($"[{entry.Index}] {entry.SceneName} ({entry.SceneType.Name})");
-}
 ```
 
 ---
@@ -231,10 +214,7 @@ foreach (var entry in UrsaCore.Scene.History)
 シーンをロードしてから、タイミングを制御して Push / Replace することができます。
 
 ```csharp
-// ロード（まだ履歴には積まれない）
 MyScene scene = await UrsaCore.Scene.CreateSceneAsync<MyScene>();
-
-// Replace して開く（現在のシーンと入れ替え）
 await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 ```
 
@@ -250,40 +230,54 @@ try
 }
 catch (OperationCanceledException)
 {
-    // Replace・JumpTo 等でシーンが正常終了せずに破棄された場合にここに来る
-    // CloseAsync(result) を経由せず破棄された場合のみスローされる
+    // Replace・JumpTo 等で CloseAsync(result) を経由せず破棄された場合
 }
 ```
 
-> **Note:** `OperationCanceledException` がスローされるのは、Replace や JumpTo などで
-> `CloseAsync(result)` を経由せずシーンが破棄された場合のみです。
-> バックキーによるキャンセルは `CloseAsync(default)` 経由のため、通常は `catch` に入りません。
+> **Note:** バックキーによるキャンセルは `CloseAsync(default)` 経由のため、通常は `catch` に入りません。
 
 ---
 
-## コールバック
+## override 可能なメソッド一覧
 
-### `OnResumeScene()`
+| メソッド | 呼ばれるタイミング |
+|---|---|
+| `OnInitializeAsync(T)` | シーン入場時（パラメーター注入後）。この時点で PreloadResourcesAsync は完了済み |
+| `OnResumeScene()` | 前面シーンが閉じて自分が最前面に戻った時。トランジション有無に関わらず発火 |
+| `OnPauseScene()` | 自分の上に別シーンが重なった時（OnResumeScene の逆）。トランジション有無に関わらず発火 |
+| `OnSceneWillClose()` | CloseAsync() が呼ばれる直前 |
+| `OnTransitionOutCompleted()` | トランジションのアウト演出完了後（画面が完全に隠れた後）。トランジションなしの場合は呼ばれない |
+| `OnTransitionInStarted()` | トランジションのイン演出開始直前。トランジションなしの場合は呼ばれない |
+| `OnBackKeyPressed()` | バックキー（Escape / Android バックキー）押下時 |
+| `OnDestroy()` | GameObject が破棄される時（Unity標準） |
 
-子シーンが閉じられ、自分が再び最前面になったときに呼ばれます。
+---
+
+## コールバック例
 
 ```csharp
+// 上にシーンが乗ったら自分を隠す
+public override void OnPauseScene()
+{
+    SetSceneActive(false);
+}
+
+// 前面シーンが閉じて戻ってきたら再表示
 public override void OnResumeScene()
 {
-    // 再表示時の処理（リスト再取得など）
+    SetSceneActive(true);
 }
-```
 
-### `OnBackKeyPressed()`（Android バックキー・Escape 対応）
+// 閉じる直前に確認や保存処理
+protected override async Task OnSceneWillClose()
+{
+    await SaveAsync();
+}
 
-インスペクターの `Handle Back Key` がON（デフォルト）かつ最前面のシーンのとき、バックキーで呼ばれます。
-
-```csharp
-// デフォルト動作: CloseAsync() が呼ばれる
-// カスタマイズしたい場合はオーバーライド:
+// バックキーのカスタマイズ
 protected override async Task OnBackKeyPressed()
 {
-    await CloseAsync(new MySceneResult { IsConfirmed = false }); // 戻り値ありの場合
+    await CloseAsync(new MyResult { IsConfirmed = false });
 }
 ```
 
@@ -295,27 +289,26 @@ protected override async Task OnBackKeyPressed()
 `PushAsync` / `ReplaceAsync` / `CreateSceneAsync` 呼び出し時に自動実行されます。
 
 ```csharp
-public class MyParameter : ISceneParameter, ISceneResourcePreloader
+public class MyParameter : ISceneParameter, ISceneResourcePreloader, ISceneResourceUnloader
 {
+    public Texture2D Icon;
+
     public async Task PreloadResourcesAsync(IProgress<float> progress = null)
     {
-        // Addressables.LoadAssetAsync(...) など
-        await Task.Delay(1000); // 例
+        Icon = await Resources.LoadAsync<Texture2D>("Icons/Hoge") as Texture2D;
     }
-}
-```
 
-## リソースの自動解放
-
-パラメーターに `ISceneResourceUnloader` を追加すると、シーン破棄（`OnDestroy`）時に自動解放されます。
-
-```csharp
-public class MyParameter : ISceneParameter, ISceneResourceUnloader
-{
     public void UnloadResources()
     {
-        // Addressables.Release(...) など
+        Resources.UnloadAsset(Icon);
     }
+}
+
+// シーン側では OnInitializeAsync でアクセスできる
+protected override async Task OnInitializeAsync(MyParameter parameter)
+{
+    _image.texture = parameter.Icon; // ロード済み
+    await Task.CompletedTask;
 }
 ```
 
@@ -331,12 +324,6 @@ public class MyParameter : ISceneParameter, ISceneResourceUnloader
 
 追加すると `FadeTransitionEffect` Prefab が **Effect Prefab** フィールドに自動アサインされます。
 
-```
-SampleScene (GameObject)
-  └─ TransitionController
-       └─ Effect Prefab: FadeTransitionEffect (自動アサイン)
-```
-
 > `TransitionController` が見つからない場合はトランジションなしで遷移します（エラーにはなりません）。
 
 ### 同梱 Prefab
@@ -349,8 +336,6 @@ SampleScene (GameObject)
 | `ShaderCircleTransitionEffect` | 中心から黒い円が広がる |
 | `ShaderDissolveTransitionEffect` | ランダムにパラパラ黒くなる |
 
-別の演出に切り替えるには **Effect Prefab** フィールドを差し替えるだけです。
-
 ### カスタム演出を作る
 
 `TransitionEffectBase` を継承して `PlayOutAsync` / `PlayInAsync` を実装します。
@@ -358,21 +343,14 @@ SampleScene (GameObject)
 ```csharp
 public class MyTransition : TransitionEffectBase
 {
-    public override async Task PlayOutAsync()
-    {
-        // 画面を覆う演出
-    }
-
-    public override async Task PlayInAsync()
-    {
-        // 画面を開ける演出
-    }
+    public override async Task PlayOutAsync() { /* 画面を覆う演出 */ }
+    public override async Task PlayInAsync()  { /* 画面を開ける演出 */ }
 }
 ```
 
 ### Prefab の再生成（開発者向け）
 
-Scripting Define Symbols に `URSA_DEVELOPER` を追加すると `Ursa/Create Transition Prefabs` メニューが現れ、Prefab を再生成できます。
+Scripting Define Symbols に `URSA_DEVELOPER` を追加すると `Ursa/Create Transition Prefabs` メニューが現れます。
 
 ---
 
@@ -387,20 +365,14 @@ UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader()));
 ### エディターでの Build Settings 不要ロード
 
 エディター上では `EditorSceneLoader` が自動登録されるため、Build Settings へのシーン登録なしにロードできます。
-`UrsaCore.Initialize(new UrsaSceneManager())` だけで動作します。
 
 > **Note:** 同名シーンが複数存在する場合は最初に見つかったものがロードされ、警告が出ます。
-> ビルド時は通常の `BuildSettingsSceneLoader` が使われます。
 
 ---
 
 ## ログのカスタマイズ
 
 デフォルトではログは出力されません。Scripting Define Symbols に `URSA_LOG` を追加すると有効になります。
-
-```
-Project Settings → Player → Scripting Define Symbols → URSA_LOG を追加
-```
 
 `IUrsaLogger` を実装することで独自のログシステムに流すこともできます。
 
@@ -412,43 +384,6 @@ public class MyLogger : IUrsaLogger
 }
 
 UrsaCore.Initialize(new UrsaSceneManager(logger: new MyLogger()));
+// Addressables と組み合わせる場合
+UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader(), new MyLogger()));
 ```
-
-> **Note:** Addressables と組み合わせる場合は両方指定できます。
-> ```csharp
-> UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader(), new MyLogger()));
-> ```
-
----
-
-## override 可能なメソッド一覧
-
-| メソッド | 修飾子 | 呼ばれるタイミング |
-|---|---|---|
-| `OnInitializeAsync(T)` | `protected virtual` | シーン入場時（パラメーター注入後） |
-| `OnResumeScene()` | `public virtual` | 前面シーンが閉じて自分が最前面に戻った時 |
-| `OnBackKeyPressed()` | `protected virtual async Task` | バックキー（Escape）押下時 |
-| `OnDestroy()` | `protected virtual` | GameObjectが破棄される時（Unity） |
-
-> `ReplaceAsync` / `CloseAsync` はコマンドメソッドのため override 不可です。
-
----
-
-## シーン全体の表示・非表示
-
-`SetSceneActive(bool)` でシーン内の全 GameObject をまとめて切り替えられます。
-Push で上に重ねた下のシーンの描画コストを省きたい場合などに使います。
-
-```csharp
-// 上にシーンを重ねるタイミングで自分を隠す
-await UrsaCore.Scene.PushAsync<NextScene>(new NextScene.Parameter());
-SetSceneActive(false);
-
-// 前面シーンが閉じて戻ってきたら再表示
-public override void OnResumeScene()
-{
-    SetSceneActive(true);
-}
-```
-
-> 非アクティブにしても `OnResumeScene()` は正しく呼ばれます。

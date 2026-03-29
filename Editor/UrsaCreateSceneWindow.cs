@@ -24,7 +24,6 @@ namespace Ursa.Editor
         private const string PrefKeyTopDomain = "Ursa_TopDomain";
         private const string PrefKeySubDomain  = "Ursa_SubDomain";
 
-        // コンパイル後にスクリプトアタッチするための SessionState キー
         private const string SessionKeyScenePath = "Ursa_PendingScenePath";
         private const string SessionKeyTypeName  = "Ursa_PendingTypeName";
 
@@ -50,7 +49,6 @@ namespace Ursa.Editor
         {
             EditorGUILayout.Space(8);
 
-            // Top Domain
             EditorGUI.BeginChangeCheck();
             _topDomain = EditorGUILayout.TextField("Top Domain", _topDomain);
             if (EditorGUI.EndChangeCheck())
@@ -60,7 +58,6 @@ namespace Ursa.Editor
                     _namespace = BuildDefaultNamespace(_topDomain, _subDomain);
             }
 
-            // Sub Domain
             EditorGUI.BeginChangeCheck();
             _subDomain = EditorGUILayout.TextField("Sub Domain", _subDomain);
             if (EditorGUI.EndChangeCheck())
@@ -70,7 +67,6 @@ namespace Ursa.Editor
                     _namespace = BuildDefaultNamespace(_topDomain, _subDomain);
             }
 
-            // Namespace（自動 or 手動）
             EditorGUI.BeginChangeCheck();
             _namespace = EditorGUILayout.TextField("Namespace", _namespace);
             if (EditorGUI.EndChangeCheck())
@@ -81,15 +77,13 @@ namespace Ursa.Editor
             _registerToBuildSettings = EditorGUILayout.Toggle("Register to Build Settings", _registerToBuildSettings);
             EditorGUILayout.Space(4);
 
-            // Scene Name（最後）
             _sceneName = EditorGUILayout.TextField("Scene Name", _sceneName);
 
             EditorGUILayout.Space(12);
 
-            // バリデーション
-            bool isValidScene  = IsValidIdentifier(_sceneName);
-            bool isValidTop    = !string.IsNullOrWhiteSpace(_topDomain);
-            bool isSameAsNs    = !string.IsNullOrWhiteSpace(_namespace) && _namespace == _sceneName;
+            bool isValidScene = IsValidIdentifier(_sceneName);
+            bool isValidTop   = !string.IsNullOrWhiteSpace(_topDomain);
+            bool isSameAsNs   = !string.IsNullOrWhiteSpace(_namespace) && _namespace == _sceneName;
 
             if (!isValidTop)
                 EditorGUILayout.HelpBox("Top Domain は必須です。", MessageType.Error);
@@ -110,7 +104,6 @@ namespace Ursa.Editor
 
         private void CreateScene()
         {
-            // Assets/TopDomain/SubDomain/ をベースパスとする
             string top      = _topDomain.Trim('/');
             string basePath = top.StartsWith("Assets") ? top : $"Assets/{top}";
             if (!string.IsNullOrWhiteSpace(_subDomain))
@@ -119,16 +112,12 @@ namespace Ursa.Editor
             string scriptDir = $"{basePath}/Script";
             string sceneDir  = $"{basePath}/Scene";
 
-            // File.WriteAllText 用の絶対パス
             string projectRoot   = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            string absScriptPath = Path.Combine(projectRoot, scriptDir,  $"{_sceneName}.cs");
-            string absPrefabKeep = Path.Combine(projectRoot, basePath,   "Prefab", ".gitkeep");
-            string absTexKeep    = Path.Combine(projectRoot, basePath,   "Texture", ".gitkeep");
+            string absScriptPath = Path.Combine(projectRoot, scriptDir, $"{_sceneName}.cs");
+            string absPrefabKeep = Path.Combine(projectRoot, basePath,  "Prefab", ".gitkeep");
+            string absTexKeep    = Path.Combine(projectRoot, basePath,  "Texture", ".gitkeep");
+            string scenePath     = $"{sceneDir}/{_sceneName}.unity";
 
-            // SaveScene 用のパス
-            string scenePath = $"{sceneDir}/{_sceneName}.unity";
-
-            // --- 既存チェック ---
             if (File.Exists(Path.Combine(projectRoot, scenePath)))
             {
                 if (!EditorUtility.DisplayDialog("確認",
@@ -137,7 +126,6 @@ namespace Ursa.Editor
                     return;
             }
 
-            // --- フォルダ作成 ---
             EnsureFolder(basePath.Substring(0, basePath.LastIndexOf('/')),
                          basePath.Substring(basePath.LastIndexOf('/') + 1));
             EnsureFolder(basePath, "Script");
@@ -147,25 +135,21 @@ namespace Ursa.Editor
             File.WriteAllText(absPrefabKeep, "");
             File.WriteAllText(absTexKeep,    "");
 
-            // --- C# スクリプト生成 ---
             string scriptContent = _withResult
                 ? GenerateScriptWithResult(_sceneName, _namespace)
                 : GenerateScript(_sceneName, _namespace);
             File.WriteAllText(absScriptPath, scriptContent);
 
-            // --- シーン作成 ---
             var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
             var rootGO = new GameObject(_sceneName);
             SceneManager.MoveGameObjectToScene(rootGO, newScene);
 
-            // Main Camera
             var cameraGO = new GameObject("Main Camera");
             cameraGO.tag = "MainCamera";
             cameraGO.AddComponent<Camera>();
             cameraGO.AddComponent<AudioListener>();
             SceneManager.MoveGameObjectToScene(cameraGO, newScene);
 
-            // Directional Light
             var lightGO = new GameObject("Directional Light");
             var light = lightGO.AddComponent<Light>();
             light.type = LightType.Directional;
@@ -173,7 +157,6 @@ namespace Ursa.Editor
             lightGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             SceneManager.MoveGameObjectToScene(lightGO, newScene);
 
-            // Global Volume
             var volumeGO = new GameObject("Global Volume");
             var volume = volumeGO.AddComponent<Volume>();
             volume.isGlobal = true;
@@ -184,11 +167,9 @@ namespace Ursa.Editor
             EditorSceneManager.SaveScene(newScene, scenePath);
             EditorSceneManager.CloseScene(newScene, true);
 
-            // --- Build Settings 自動登録 ---
             if (_registerToBuildSettings)
                 AddSceneToBuildSettings(scenePath);
 
-            // --- コンパイル後にスクリプトをアタッチするよう予約 ---
             string fullTypeName = string.IsNullOrWhiteSpace(_namespace)
                 ? _sceneName
                 : $"{_namespace}.{_sceneName}";
@@ -199,7 +180,6 @@ namespace Ursa.Editor
             Debug.Log($"<color=cyan>[Ursa]</color> Scene '{_sceneName}' を生成しました → {basePath}");
         }
 
-        /// <summary>フォルダが存在しない場合のみ作成する（中間フォルダも再帰的に作成）</summary>
         private static void EnsureFolder(string parent, string folderName)
         {
             if (!AssetDatabase.IsValidFolder(parent))
@@ -208,15 +188,11 @@ namespace Ursa.Editor
                 if (lastSlash > 0)
                     EnsureFolder(parent.Substring(0, lastSlash), parent.Substring(lastSlash + 1));
             }
-
             string path = $"{parent}/{folderName}";
             if (!AssetDatabase.IsValidFolder(path))
                 AssetDatabase.CreateFolder(parent, folderName);
         }
 
-        /// <summary>
-        /// コンパイル完了後に呼ばれ、予約されていたスクリプトをシーンにアタッチして再保存する。
-        /// </summary>
         [InitializeOnLoadMethod]
         private static void TryAttachPendingScript()
         {
@@ -292,6 +268,23 @@ using Ursa.Scenes;
 {i}    {{
 {i}    }}
 
+{i}    public override void OnPauseScene()
+{i}    {{
+{i}    }}
+
+{i}    protected override async Task OnSceneWillClose()
+{i}    {{
+{i}        await Task.CompletedTask;
+{i}    }}
+
+{i}    public override void OnTransitionOutCompleted()
+{i}    {{
+{i}    }}
+
+{i}    public override void OnTransitionInStarted()
+{i}    {{
+{i}    }}
+
 {i}    protected override async Task OnBackKeyPressed()
 {i}    {{
 {i}        await CloseAsync();
@@ -326,6 +319,23 @@ using Ursa.Scenes;
 {i}    {{
 {i}    }}
 
+{i}    public override void OnPauseScene()
+{i}    {{
+{i}    }}
+
+{i}    protected override async Task OnSceneWillClose()
+{i}    {{
+{i}        await Task.CompletedTask;
+{i}    }}
+
+{i}    public override void OnTransitionOutCompleted()
+{i}    {{
+{i}    }}
+
+{i}    public override void OnTransitionInStarted()
+{i}    {{
+{i}    }}
+
 {i}    protected override async Task OnBackKeyPressed()
 {i}    {{
 {i}        await CloseAsync(default);
@@ -338,15 +348,12 @@ using Ursa.Scenes;
         // ユーティリティ
         // ────────────────────────────────────────────
 
-        /// <summary>Top Domain + Sub Domain からデフォルト Namespace を生成する</summary>
         private static string BuildDefaultNamespace(string topDomain, string subDomain)
         {
             string top = topDomain?.Trim('/') ?? "";
             if (top.StartsWith("Assets/")) top = top.Substring("Assets/".Length);
             else if (top == "Assets") top = "";
-
             string sub = subDomain?.Trim('/') ?? "";
-
             if (string.IsNullOrWhiteSpace(top) && string.IsNullOrWhiteSpace(sub)) return "";
             if (string.IsNullOrWhiteSpace(sub)) return top;
             if (string.IsNullOrWhiteSpace(top)) return sub;
@@ -367,7 +374,6 @@ using Ursa.Scenes;
             var scenes = EditorBuildSettings.scenes;
             foreach (var s in scenes)
                 if (s.path == scenePath) return;
-
             var newScenes = new EditorBuildSettingsScene[scenes.Length + 1];
             scenes.CopyTo(newScenes, 0);
             newScenes[scenes.Length] = new EditorBuildSettingsScene(scenePath, true);
