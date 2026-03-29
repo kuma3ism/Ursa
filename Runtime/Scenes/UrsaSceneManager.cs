@@ -45,6 +45,7 @@ namespace Ursa.Scenes
         // Buffers to avoid allocations
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
+        private readonly List<ISceneTransitionHandler> _transitionHandlerBuffer = new List<ISceneTransitionHandler>();
 
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
@@ -94,9 +95,17 @@ namespace Ursa.Scenes
             _isTransitioning = true;
             try
             {
-                if (canvas != null) await canvas.PlayOutAsync();
+                if (canvas != null)
+                {
+                    await canvas.PlayOutAsync();
+                    NotifyTransitionOutCompleted();
+                }
                 await action();
-                if (canvas != null) await canvas.PlayInAsync();
+                if (canvas != null)
+                {
+                    NotifyTransitionInStarted();
+                    await canvas.PlayInAsync();
+                }
             }
             finally
             {
@@ -159,6 +168,7 @@ namespace Ursa.Scenes
             }
 
             if (_history.Count == 0) RegisterInitialScene();
+            NotifyPauseScene();
             await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Additive, transitionType);
         }
 
@@ -363,6 +373,63 @@ namespace Ursa.Scenes
             }
         }
 
+        private void NotifyPauseScene()
+        {
+            if (_history.Count == 0) return;
+
+            Scene topScene = _history[_history.Count - 1].Scene;
+            if (topScene.IsValid() && topScene.isLoaded)
+            {
+                topScene.GetRootGameObjects(_rootGameObjectBuffer);
+                foreach (var go in _rootGameObjectBuffer)
+                {
+                    go.GetComponentsInChildren<ISceneBackHandler>(true, _backHandlerBuffer);
+                    foreach (var handler in _backHandlerBuffer)
+                        handler.OnPauseScene();
+                    _backHandlerBuffer.Clear();
+                }
+                _rootGameObjectBuffer.Clear();
+            }
+        }
+
+        private void NotifyTransitionOutCompleted()
+        {
+            if (_history.Count == 0) return;
+
+            Scene topScene = _history[_history.Count - 1].Scene;
+            if (topScene.IsValid() && topScene.isLoaded)
+            {
+                topScene.GetRootGameObjects(_rootGameObjectBuffer);
+                foreach (var go in _rootGameObjectBuffer)
+                {
+                    go.GetComponentsInChildren<ISceneTransitionHandler>(true, _transitionHandlerBuffer);
+                    foreach (var handler in _transitionHandlerBuffer)
+                        handler.OnTransitionOutCompleted();
+                    _transitionHandlerBuffer.Clear();
+                }
+                _rootGameObjectBuffer.Clear();
+            }
+        }
+
+        private void NotifyTransitionInStarted()
+        {
+            if (_history.Count == 0) return;
+
+            Scene topScene = _history[_history.Count - 1].Scene;
+            if (topScene.IsValid() && topScene.isLoaded)
+            {
+                topScene.GetRootGameObjects(_rootGameObjectBuffer);
+                foreach (var go in _rootGameObjectBuffer)
+                {
+                    go.GetComponentsInChildren<ISceneTransitionHandler>(true, _transitionHandlerBuffer);
+                    foreach (var handler in _transitionHandlerBuffer)
+                        handler.OnTransitionInStarted();
+                    _transitionHandlerBuffer.Clear();
+                }
+                _rootGameObjectBuffer.Clear();
+            }
+        }
+
         public bool IsTopScene(Scene scene)
         {
             if (_history.Count == 0) RegisterInitialScene();
@@ -436,6 +503,7 @@ namespace Ursa.Scenes
                 _logger.LogWarning("[Ursa] PushInstanceAsync はトランジション演出に未対応です。transitionType は無視されます。");
 
             if (_history.Count == 0) RegisterInitialScene();
+            NotifyPauseScene();
             PushHistory(scene, null);
             return Task.CompletedTask;
         }

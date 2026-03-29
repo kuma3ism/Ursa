@@ -122,6 +122,26 @@ namespace Ursa
     /// </summary>
     public interface ISceneBackHandler
     {
+        /// <summary>前面シーンが閉じられ、自分が再び最前面になった時に呼ばれます。</summary>
         void OnResumeScene();
+
+        /// <summary>
+        /// 自分の上に別のシーンが重なった時に呼ばれます（OnResumeScene の逆）。
+        /// トランジションの有無に関わらず発火します。
+        /// </summary>
+        void OnPauseScene();
+    }
+
+    /// <summary>
+    /// トランジション演出のフェーズ通知を受け取るインターフェース。
+    /// トランジションがない場合は呼ばれません。
+    /// </summary>
+    public interface ISceneTransitionHandler
+    {
+        /// <summary>トランジションのアウト演出が完了し、画面が完全に隠れた後に呼ばれます。</summary>
+        void OnTransitionOutCompleted();
+
+        /// <summary>トランジションのイン演出が始まる直前に呼ばれます。</summary>
+        void OnTransitionInStarted();
     }
 }
