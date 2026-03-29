@@ -38,7 +38,7 @@ namespace Ursa.Scenes
         /// <c>OpenAsync()</c> / <c>ReplaceAsync()</c> およびシーン遷移によるパラメーター注入時に呼ばれます。
         ///
         /// 【！重要！】Unityの仕様上、<c>Awake()</c> や <c>Start()</c> はこのメソッドよりも先に呼ばれます。
-        /// その時点では <c>CurrentParam</c> はまだ null のため、パラメータを使った初期化はここに記述してください。
+        /// その時点では <c>CurrentParam</c> はまだ null のため、パラメータを使った初期化処理はここに記述してください。
         /// </summary>
         protected virtual async Task OnInitializeAsync(T parameter)
         {
@@ -89,6 +89,7 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task CloseAsync()
         {
+            await OnSceneWillClose();
             await UrsaCore.Scene.PopAsync();
         }
 
@@ -98,6 +99,15 @@ namespace Ursa.Scenes
         public virtual void OnResumeScene()
         {
             // 子供が消えて自分が最前面になった時に呼ばれる
+        }
+
+        /// <summary>
+        /// <c>CloseAsync()</c> が呼ばれ、シーンが閉じられる直前に呼ばれます。
+        /// 保存処理や確認ダイアログなどを挟みたい場合にオーバーライドしてください。
+        /// </summary>
+        protected virtual async Task OnSceneWillClose()
+        {
+            await Task.CompletedTask;
         }
 
         private void LateUpdate()
@@ -162,6 +172,7 @@ namespace Ursa.Scenes
         /// </summary>
         public async Task CloseAsync(TResult result = default)
         {
+            await OnSceneWillClose();
             await UrsaCore.Scene.PopAsync();
             _tcs?.TrySetResult(result);
         }
