@@ -8,7 +8,7 @@ namespace Ursa.Scenes
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneTransitionHandler where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
 
@@ -116,6 +116,22 @@ namespace Ursa.Scenes
         protected virtual async Task OnSceneWillClose()
         {
             await Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// トランジションのアウト演出が完了し、画面が完全に隠れた後に呼ばれます。
+        /// トランジションがない場合は呼ばれません。
+        /// </summary>
+        public virtual void OnTransitionOutCompleted()
+        {
+        }
+
+        /// <summary>
+        /// トランジションのイン演出が始まる直前に呼ばれます。
+        /// トランジションがない場合は呼ばれません。
+        /// </summary>
+        public virtual void OnTransitionInStarted()
+        {
         }
 
         private void LateUpdate()
