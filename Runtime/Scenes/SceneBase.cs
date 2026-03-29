@@ -95,10 +95,18 @@ namespace Ursa.Scenes
 
         /// <summary>
         /// 前面に重なっていた別のシーンが閉じられ、再びこのシーンが最前面（アクティブ）になった際に呼ばれます。
+        /// トランジションの有無に関わらず発火します。
         /// </summary>
         public virtual void OnResumeScene()
         {
-            // 子供が消えて自分が最前面になった時に呼ばれる
+        }
+
+        /// <summary>
+        /// 自分の上に別のシーンが重なった際に呼ばれます（OnResumeScene の逆）。
+        /// トランジションの有無に関わらず発火します。
+        /// </summary>
+        public virtual void OnPauseScene()
+        {
         }
 
         /// <summary>
