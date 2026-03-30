@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Ursa.Blur;
 using Ursa.Transitions;
 
 namespace Ursa
@@ -45,6 +46,15 @@ namespace Ursa
                     UnityEditor.AssetDatabase.SaveAssets();
                     UnityEditor.AssetDatabase.Refresh();
                 }
+
+                // ブラー設定が空の場合は自動でプレファブを探してセットする
+                if (_instance.Blurs == null || _instance.Blurs.Count == 0)
+                {
+                    _instance.SetupDefaultBlurs();
+                    UnityEditor.EditorUtility.SetDirty(_instance);
+                    UnityEditor.AssetDatabase.SaveAssets();
+                    UnityEditor.AssetDatabase.Refresh();
+                }
 #endif
                 return _instance;
             }
@@ -57,7 +67,6 @@ namespace Ursa
             Transitions ??= new List<TransitionEntry>();
             Transitions.Clear();
 
-            // パス決め打ちをやめ、型名で検索する（パッケージ配布時も Packages/ 以下を検索できる）
             var targets = new[]
             {
                 ("Fade",     "FadeTransitionEffect"),
@@ -69,18 +78,13 @@ namespace Ursa
 
             foreach (var (name, typeName) in targets)
             {
-                // t:prefab + 型名で検索。Assets/ と Packages/ 両方がヒットする
                 var guids = UnityEditor.AssetDatabase.FindAssets($"{typeName} t:prefab");
                 TransitionEffectBase prefab = null;
                 foreach (var guid in guids)
                 {
                     var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
                     var candidate = UnityEditor.AssetDatabase.LoadAssetAtPath<TransitionEffectBase>(path);
-                    if (candidate != null)
-                    {
-                        prefab = candidate;
-                        break;
-                    }
+                    if (candidate != null) { prefab = candidate; break; }
                 }
 
                 if (prefab != null)
@@ -94,6 +98,39 @@ namespace Ursa
                 }
             }
         }
+
+        private void SetupDefaultBlurs()
+        {
+            Blurs ??= new List<BlurEntry>();
+            Blurs.Clear();
+
+            var targets = new[]
+            {
+                ("Screenshot", "ScreenshotBlurEffect"),
+            };
+
+            foreach (var (name, typeName) in targets)
+            {
+                var guids = UnityEditor.AssetDatabase.FindAssets($"{typeName} t:prefab");
+                BlurEffectBase prefab = null;
+                foreach (var guid in guids)
+                {
+                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    var candidate = UnityEditor.AssetDatabase.LoadAssetAtPath<BlurEffectBase>(path);
+                    if (candidate != null) { prefab = candidate; break; }
+                }
+
+                if (prefab != null)
+                {
+                    Blurs.Add(new BlurEntry { Name = name, Prefab = prefab });
+                    Debug.Log($"[Ursa] Auto attached blur prefab: {name}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[Ursa] Blur prefab not found: {typeName}");
+                }
+            }
+        }
 #endif
 
         // ==========================================
@@ -101,7 +138,6 @@ namespace Ursa
         // ==========================================
 
         [Header("シーン遷移（Transitions）")]
-        [SerializeField]
         public List<TransitionEntry> Transitions = new List<TransitionEntry>();
 
         [Serializable]
@@ -112,18 +148,39 @@ namespace Ursa
             public TransitionEffectBase Prefab;
         }
 
+        [Header("背景ブラー（Blurs）")]
+        public List<BlurEntry> Blurs = new List<BlurEntry>();
+
+        [Serializable]
+        public class BlurEntry
+        {
+            public string Name;
+            [Tooltip("使用するブラーエフェクトの実体（BlurEffectBase）")]
+            public BlurEffectBase Prefab;
+        }
+
         /// <summary>
         /// 指定した TransitionType に対応するプレハブを返します。
         /// </summary>
         public TransitionEffectBase GetTransitionPrefab(TransitionType type)
         {
             if (Transitions == null || type == TransitionType.Default) return null;
-
             string typeName = type.ToString();
             foreach (var entry in Transitions)
-            {
                 if (entry.Name == typeName) return entry.Prefab;
-            }
+            return null;
+        }
+
+        /// <summary>
+        /// 指定した名前のブラーエフェクトプレハブを返します。
+        /// 名前を省略するとリストの先頭を返します。
+        /// </summary>
+        public BlurEffectBase GetBlurPrefab(string blurName = null)
+        {
+            if (Blurs == null || Blurs.Count == 0) return null;
+            if (string.IsNullOrEmpty(blurName)) return Blurs[0].Prefab;
+            foreach (var entry in Blurs)
+                if (entry.Name == blurName) return entry.Prefab;
             return null;
         }
     }
