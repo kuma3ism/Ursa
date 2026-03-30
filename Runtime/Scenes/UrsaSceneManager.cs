@@ -123,14 +123,14 @@ namespace Ursa.Scenes
             return result;
         }
 
-        // 現在最前面のシーンから BlurController を取得（なければ null）
-        private BlurController GetActiveBlurController()
+        /// <summary>
+        /// 指定シーンから BlurController を取得（なければ null）
+        /// </summary>
+        private BlurController GetBlurController(Scene scene)
         {
-            if (_history.Count == 0) return null;
-            var topScene = _history[_history.Count - 1].Scene;
-            if (!topScene.IsValid() || !topScene.isLoaded) return null;
+            if (!scene.IsValid() || !scene.isLoaded) return null;
 
-            topScene.GetRootGameObjects(_rootGameObjectBuffer);
+            scene.GetRootGameObjects(_rootGameObjectBuffer);
             BlurController result = null;
             foreach (var go in _rootGameObjectBuffer)
             {
@@ -139,6 +139,34 @@ namespace Ursa.Scenes
             }
             _rootGameObjectBuffer.Clear();
             return result;
+        }
+
+        /// <summary>
+        /// 現在の履歴トップ（=下のシーン）にブラーをかける共通処理。
+        /// BlurController がなければ何もしません。
+        /// </summary>
+        private async Task PlayBlurOnCurrentTopAsync()
+        {
+            if (_history.Count == 0) return;
+            var topScene = _history[_history.Count - 1].Scene;
+            var blurController = GetBlurController(topScene);
+            if (blurController == null) return;
+
+            var blurCanvas = BlurCanvas.EnsureInstance();
+            if (blurCanvas == null) return;
+
+            blurCanvas.ApplyController(blurController);
+            await blurCanvas.PlayBlurAsync();
+        }
+
+        /// <summary>
+        /// ブラーを解除する共通処理。
+        /// </summary>
+        private async Task StopBlurAsync()
+        {
+            var blurCanvas = BlurCanvas.EnsureInstance();
+            if (blurCanvas == null) return;
+            await blurCanvas.StopBlurAsync();
         }
 
         /// <summary>
@@ -159,7 +187,7 @@ namespace Ursa.Scenes
         /// <summary>
         /// 現在のシーンの上に重ねる (Additive)
         /// パラメーターの IsHistory が false の場合、履歴には積まれません。
-        /// Push 先のシーンに BlurController があれば、現在のシーンにブラーを自動でかけます。
+        /// 現在のシーンに BlurController があれば、シーンロード前にブラーを自動でかけます。
         /// </summary>
         public async Task PushAsync<TScene>(ISceneParameter parameter, TransitionType transitionType = TransitionType.Default) where TScene : MonoBehaviour
         {
@@ -170,17 +198,12 @@ namespace Ursa.Scenes
             }
 
             if (_history.Count == 0) RegisterInitialScene();
+
+            // シーンロード前に下のシーンのブラーを開始（スクリーンショットはここで撮る）
+            await PlayBlurOnCurrentTopAsync();
+
             NotifyPauseScene();
             await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Additive, transitionType);
-
-            // ロード後、新しいシーンに BlurController があればブラーを開始
-            var blurCanvas = BlurCanvas.EnsureInstance();
-            var blurController = GetActiveBlurController();
-            if (blurController != null)
-            {
-                blurCanvas.ApplyController(blurController);
-                _ = blurCanvas.PlayBlurAsync();
-            }
         }
 
         /// <summary>
@@ -223,7 +246,7 @@ namespace Ursa.Scenes
 
         /// <summary>
         /// 一つ前のシーンに戻る。
-        /// 現在のシーンにブラーがかかっていれば自動で解除します。
+        /// ブラーがかかっていれば Pop 前に解除します。
         /// </summary>
         public async Task PopAsync(TransitionType transitionType = TransitionType.Default)
         {
@@ -233,9 +256,7 @@ namespace Ursa.Scenes
                 return;
             }
 
-            // Pop前に現在シーンのブラーを解除
-            var blurCanvas = BlurCanvas.EnsureInstance();
-            await blurCanvas.StopBlurAsync();
+            await StopBlurAsync();
 
             await ExecuteTransitionAsync(async () =>
             {
@@ -283,9 +304,7 @@ namespace Ursa.Scenes
                 return;
             }
 
-            // ジャンプ前にブラーを解除
-            var blurCanvas = BlurCanvas.EnsureInstance();
-            await blurCanvas.StopBlurAsync();
+            await StopBlurAsync();
 
             await ExecuteTransitionAsync(async () =>
             {
@@ -472,21 +491,24 @@ namespace Ursa.Scenes
             return result;
         }
 
-        public Task PushInstanceAsync(Scene scene, TransitionType transitionType = TransitionType.Default)
+        public async Task PushInstanceAsync(Scene scene, TransitionType transitionType = TransitionType.Default)
         {
             if (_isTransitioning)
             {
                 _logger.LogWarning("[Ursa] 遷移中のため、PushInstanceAsync 要求を無視しました。");
-                return Task.CompletedTask;
+                return;
             }
 
             if (transitionType != TransitionType.Default)
                 _logger.LogWarning("[Ursa] PushInstanceAsync はトランジション演出に未対応です。transitionType は無視されます。");
 
             if (_history.Count == 0) RegisterInitialScene();
+
+            // シーンが積まれる前（=下のシーンがまだ top の状態）でブラーをかける
+            await PlayBlurOnCurrentTopAsync();
+
             NotifyPauseScene();
             PushHistory(scene, null);
-            return Task.CompletedTask;
         }
 
         public async Task ReplaceInstanceAsync(Scene scene, TransitionType transitionType = TransitionType.Default)
