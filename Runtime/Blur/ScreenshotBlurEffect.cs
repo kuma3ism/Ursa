@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,6 +18,7 @@ namespace Ursa.Blur
     /// 【BlurController との連携】
     /// BlurController を同シーンに置くことで、PushAsync / PushInstanceAsync 時に
     /// UrsaSceneManager が自動的に PlayBlurAsync / StopBlurAsync を呼び出します。
+    /// BlurController はポップアップを開く側（下のシーン）に置いてください。
     /// </summary>
     public class ScreenshotBlurEffect : BlurEffectBase
     {
@@ -31,16 +33,14 @@ namespace Ursa.Blur
 
         /// <summary>
         /// 現在の画面をキャプチャしてブラーをかけ、背景として表示します。
-        /// スクリーンショットはこのメソッド冒頭で撮影するため、
-        /// 呼び出し元はシーンロード前（ポップアップが映り込む前）に呼ぶ必要があります。
+        /// UrsaSceneManager がシーンロード前に呼び出すため、
+        /// ポップアップが映り込まない状態でキャプチャできます。
         /// </summary>
         public override async Task PlayBlurAsync()
         {
-            // エンドオブフレームまで待ってから撮影することで、
-            // 現在フレームの描画結果（ポップアップなし）を確実にキャプチャする
-            yield return new WaitForEndOfFrame() を使いたいが Task では使えないため、
-            // RendererFrame の完了を待つ
-            await Task.Yield();
+            // ReadPixels はエンドオブフレーム後でないと機能しないため
+            // WaitForEndOfFrame を Coroutine 経由で待機する
+            await WaitForEndOfFrameAsync();
 
             CaptureScreenshot();
             ApplyBlur();
@@ -54,6 +54,23 @@ namespace Ursa.Blur
         {
             await FadeOut();
             Cleanup();
+        }
+
+        /// <summary>
+        /// WaitForEndOfFrame を Task として待機するためのヘルパー。
+        /// async Task メソッド内では yield return が使えないため Coroutine で橋渡しする。
+        /// </summary>
+        private Task WaitForEndOfFrameAsync()
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            StartCoroutine(WaitForEndOfFrameRoutine(tcs));
+            return tcs.Task;
+        }
+
+        private IEnumerator WaitForEndOfFrameRoutine(TaskCompletionSource<bool> tcs)
+        {
+            yield return new WaitForEndOfFrame();
+            tcs.SetResult(true);
         }
 
         private void CaptureScreenshot()
