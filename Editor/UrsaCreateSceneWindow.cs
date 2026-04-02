@@ -17,7 +17,6 @@ namespace Ursa.Editor
         private string _subDomain = "";
         private string _namespace = "";
         private string _sceneName = "NewScene";
-        private bool _withResult = false;
         private bool _registerToBuildSettings = true;
         private bool _namespaceDirty = false;
 
@@ -32,8 +31,8 @@ namespace Ursa.Editor
         public static void Open()
         {
             var window = GetWindow<UrsaCreateSceneWindow>(true, "Create Ursa Scene", true);
-            window.minSize = new Vector2(380, 240);
-            window.maxSize = new Vector2(380, 320);
+            window.minSize = new Vector2(380, 220);
+            window.maxSize = new Vector2(380, 300);
             window.Show();
         }
 
@@ -73,7 +72,6 @@ namespace Ursa.Editor
                 _namespaceDirty = _namespace != BuildDefaultNamespace(_topDomain, _subDomain);
 
             EditorGUILayout.Space(4);
-            _withResult = EditorGUILayout.Toggle("With Result (戻り値あり)", _withResult);
             _registerToBuildSettings = EditorGUILayout.Toggle("Register to Build Settings", _registerToBuildSettings);
             EditorGUILayout.Space(4);
 
@@ -135,9 +133,7 @@ namespace Ursa.Editor
             File.WriteAllText(absPrefabKeep, "");
             File.WriteAllText(absTexKeep,    "");
 
-            string scriptContent = _withResult
-                ? GenerateScriptWithResult(_sceneName, _namespace)
-                : GenerateScript(_sceneName, _namespace);
+            string scriptContent = GenerateScript(_sceneName, _namespace);
             File.WriteAllText(absScriptPath, scriptContent);
 
             var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
@@ -288,57 +284,6 @@ using Ursa.Scenes;
 {i}    protected override async Task OnBackKeyPressed()
 {i}    {{
 {i}        await CloseAsync();
-{i}    }}
-{i}}}
-{nsClose}";
-        }
-
-        private static string GenerateScriptWithResult(string name, string ns)
-        {
-            string nsOpen  = string.IsNullOrWhiteSpace(ns) ? "" : $"namespace {ns}\n{{\n";
-            string nsClose = string.IsNullOrWhiteSpace(ns) ? "" : "}\n";
-            string i       = string.IsNullOrWhiteSpace(ns) ? "" : "    ";
-
-            return
-$@"using System.Threading.Tasks;
-using Ursa;
-using Ursa.Scenes;
-
-{nsOpen}{i}public class {name} : SceneBaseWithResult<{name}.Parameter, {name}.Result>
-{i}{{
-{i}    public class Parameter : ISceneParameter {{ public string Message; }}
-
-{i}    public class Result {{ }}
-
-{i}    protected override async Task OnInitializeAsync(Parameter parameter)
-{i}    {{
-{i}        await Task.CompletedTask;
-{i}    }}
-
-{i}    public override void OnResumeScene()
-{i}    {{
-{i}    }}
-
-{i}    public override void OnPauseScene()
-{i}    {{
-{i}    }}
-
-{i}    protected override async Task OnSceneWillClose()
-{i}    {{
-{i}        await Task.CompletedTask;
-{i}    }}
-
-{i}    public override void OnTransitionOutCompleted()
-{i}    {{
-{i}    }}
-
-{i}    public override void OnTransitionInStarted()
-{i}    {{
-{i}    }}
-
-{i}    protected override async Task OnBackKeyPressed()
-{i}    {{
-{i}        await CloseAsync(default);
 {i}    }}
 {i}}}
 {nsClose}";

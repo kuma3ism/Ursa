@@ -534,20 +534,5 @@ namespace Ursa.Scenes
                 PushHistory(scene, null);
             }, transitionType);
         }
-
-        /// <summary>
-        /// 対象のシーンをロードし、パラメーターを渡して開いた上で、
-        /// そのシーンが閉じられて結果が返ってくるまで待機して値を返します。
-        /// </summary>
-        public async Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter, TransitionType transitionType = TransitionType.Default)
-            where TScene : SceneBaseWithResult<TParam, TResult>
-            where TParam : ISceneParameter
-        {
-            var sceneInstance = await CreateSceneAsync<TScene>(parameter, transitionType);
-            if (sceneInstance == null) return default;
-
-            await sceneInstance.OpenAsync(parameter);
-            return await sceneInstance.WaitForResultAsync();
-        }
     }
 }
