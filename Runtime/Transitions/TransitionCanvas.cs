@@ -11,7 +11,7 @@ namespace Ursa.Transitions
     /// </summary>
     [RequireComponent(typeof(Canvas))]
     [RequireComponent(typeof(CanvasGroup))]
-    public class TransitionCanvas : MonoBehaviour, ITransitionEffect
+    public class TransitionCanvas : MonoBehaviour
     {
         private static TransitionCanvas _instance;
 
@@ -59,10 +59,12 @@ namespace Ursa.Transitions
 
         /// <summary>
         /// 遷移元シーンの <see cref="TransitionController"/> を適用します。
+        /// <see cref="ApplyEffect"/> で設定した直接エフェクトをクリアします。
         /// </summary>
         public void ApplyController(TransitionController controller)
         {
             _controller = controller;
+            _directEffect = null;
         }
 
         /// <summary>
@@ -72,8 +74,6 @@ namespace Ursa.Transitions
         {
             _directEffect = effect;
         }
-
-        // ── ITransitionEffect ─────────────────────────────────
 
         public async Task PlayOutAsync()
         {
@@ -85,6 +85,10 @@ namespace Ursa.Transitions
         {
             var effect = _directEffect != null ? _directEffect : _controller?.Effect;
             if (effect != null) await effect.PlayInAsync();
+
+            // 遷移完了後にリセット（次の遷移で前回のエフェクトが残らないよう）
+            _directEffect = null;
+            _controller = null;
         }
     }
 }
