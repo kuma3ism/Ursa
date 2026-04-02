@@ -7,7 +7,6 @@ Unityの俺俺フレームワーク
 - シーン管理
   - 履歴管理：シーンの追加、差替え、戻る、等の遷移の履歴を管理
   - 引数：起動時に引数を渡せる
-  - 戻り値：シーンの終了時に戻り値も設定できる（あまり使われないと思う）
   - トランジション：複数の候補から選択可能
   - シーンジェネレーター：シーンを自動作成
 - ポップアップ管理（実装率０％）
@@ -30,7 +29,6 @@ https://github.com/kuma3ism/Ursa.git
 | Top Domain | ルートとなるドメイン名（必須）。例: `Game` |
 | Sub Domain | サブドメイン名（省略可）。例: `Gacha` |
 | Namespace | Top + Sub から自動生成。手動入力で上書きも可 |
-| With Result | `SceneBaseWithResult<TParam, TResult>` 版を生成 |
 | Register to Build Settings | Build Settings に自動登録 |
 | Scene Name | クラス名・ファイル名になる（必須）。例: `GachaTop` |
 
@@ -122,24 +120,6 @@ public class MyScene : SceneBase<MySceneParameter>
 }
 ```
 
-#### 戻り値あり（ポップアップ・確認ダイアログなど）
-
-```csharp
-public class MyScene : SceneBaseWithResult<MySceneParameter, MySceneResult>
-{
-    protected override async Task OnInitializeAsync(MySceneParameter parameter)
-    {
-        Debug.Log(parameter.Message);
-        await Task.CompletedTask;
-    }
-
-    async void OnConfirmButton()
-    {
-        await CloseAsync(new MySceneResult { IsConfirmed = true });
-    }
-}
-```
-
 > **【重要】** Unityの仕様上、`Awake()` / `Start()` は `OnInitializeAsync` より先に呼ばれます。  
 > `CurrentParam` を参照する初期化処理は必ず `OnInitializeAsync()` に書いてください。
 
@@ -220,24 +200,6 @@ await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 
 ---
 
-## 戻り値を受け取る（ポップアップ待機）
-
-```csharp
-try
-{
-    var result = await UrsaCore.Scene.OpenResultAsync<MyScene, MySceneParameter, MySceneResult>(param);
-    Debug.Log(result.IsConfirmed);
-}
-catch (OperationCanceledException)
-{
-    // Replace・JumpTo 等で CloseAsync(result) を経由せず破棄された場合
-}
-```
-
-> **Note:** バックキーによるキャンセルは `CloseAsync(default)` 経由のため、通常は `catch` に入りません。
-
----
-
 ## override 可能なメソッド一覧
 
 | メソッド | 呼ばれるタイミング |
@@ -277,7 +239,7 @@ protected override async Task OnSceneWillClose()
 // バックキーのカスタマイズ
 protected override async Task OnBackKeyPressed()
 {
-    await CloseAsync(new MyResult { IsConfirmed = false });
+    await CloseAsync();
 }
 ```
 
