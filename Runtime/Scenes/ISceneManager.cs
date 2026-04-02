@@ -56,13 +56,6 @@ namespace Ursa
         /// 既にロード済みのシーンのインスタンスを、現在の最前面のシーンと入れ替えて履歴を更新します。
         /// </summary>
         Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene, TransitionType transitionType = TransitionType.Default);
-        
-        /// <summary>
-        /// 戻り値を持つシーンをロードし、そのポップアップ等が終了して結果が返ってくるまで待機します。
-        /// </summary>
-        Task<TResult> OpenResultAsync<TScene, TParam, TResult>(TParam parameter, TransitionType transitionType = TransitionType.Default)
-            where TScene : Ursa.Scenes.SceneBaseWithResult<TParam, TResult>
-            where TParam : ISceneParameter;
 
         /// <summary>
         /// 現在の履歴スタックを古い順（インデックス0が最も古い）で返します。
