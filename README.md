@@ -1,6 +1,6 @@
 # Ursa
 
-Unityの俺俺フレームワーク
+UnityのオレオレFramework
 
 いろんな現場で毎回同じような実装するのでフレームワークとして起こす
 
@@ -409,10 +409,10 @@ namespace Ursa.Dialogs
 
     // OpenAsync で返されるダイアログ本体が実装する共通契約
     // WaitForCloseAsync は「閉じる命令」ではなく「ユーザー操作で閉じるまで待つ」用途
-    // ダイアログが CloseAll で一括終了された場合は null を返す
+    // ダイアログが CloseAll で一括終了された場合は OperationCanceledException をスローする
     public interface IOpenDialog<TResult>
     {
-        Task<TResult?> WaitForCloseAsync();
+        Task<TResult> WaitForCloseAsync();
     }
 
     // ユーザーコードが購読できる公開イベント（Scene のコールバック思想に合わせる）
@@ -432,30 +432,28 @@ namespace Ursa.Dialogs
         bool HasAnyDialog { get; }
         IReadOnlyList<IDialogHistoryEntry> History { get; }
 
-        // 同種ダイアログの多重表示を許可（メッセージ違いの Confirm を連続で開ける）
-        bool AllowDuplicateDialogType { get; }
-
+        // 同種ダイアログの多重表示は常に許可（メッセージ違いの Confirm を連続で開ける）
         // parameter が IDialogResourcePreloader を実装していれば、
         // Dialog生成と並行して PreloadResourcesAsync を走らせる
-        Task<TDialog> OpenAsync<TDialog, TParam, TResult>(
-            TParam parameter,
+        // TParam は TDialog が実装する IDialogReceiver<TParam, TResult> から解決されるため
+        // 呼び出し側での明示は不要（Scene の PushAsync<TScene>(param) と同じ分担）
+        Task<TDialog> OpenAsync<TDialog, TResult>(
+            IDialogParameter parameter,
             CancellationToken ct = default)
-            where TDialog : Component, IDialogReceiver<TParam, TResult>, IOpenDialog<TResult>, IDialogLifecycleEvents
-            where TParam : IDialogParameter;
+            where TDialog : Component, IOpenDialog<TResult>, IDialogLifecycleEvents;
 
-        Task<TDialog> OpenAsync<TDialog, TParam>(
-            TParam parameter,
+        Task<TDialog> OpenAsync<TDialog>(
+            IDialogParameter parameter,
             CancellationToken ct = default)
-            where TDialog : Component, IDialogReceiver<TParam>, IOpenDialog<Unit>, IDialogLifecycleEvents
-            where TParam : IDialogParameter;
+            where TDialog : Component, IOpenDialog<Unit>, IDialogLifecycleEvents;
 
-        // Open + (任意でinstanceを設定) + Close待機 を1行で行うショートハンド
-        Task<TResult?> OpenWithCloseAsync<TDialog, TParam, TResult>(
-            TParam parameter,
-            Action<TDialog> configure = null,
+        // Open + (任意でインスタンスを設定) + Close待機 を1行で行うショートハンド
+        // configure は非同期も扱えるよう Func<TDialog, Task>（不要なら null）
+        Task<TResult> OpenWithCloseAsync<TDialog, TResult>(
+            IDialogParameter parameter,
+            Func<TDialog, Task> configure = null,
             CancellationToken ct = default)
-            where TDialog : Component, IDialogReceiver<TParam, TResult>, IOpenDialog<TResult>, IDialogLifecycleEvents
-            where TParam : IDialogParameter;
+            where TDialog : Component, IOpenDialog<TResult>, IDialogLifecycleEvents;
 
         Task CloseTopAsync(DialogCloseReason reason = DialogCloseReason.Programmatic);
         Task CloseAllAsync(DialogCloseReason reason = DialogCloseReason.Programmatic);
@@ -519,49 +517,65 @@ namespace Ursa.Dialogs
    - SceneBase と同様に、イベント発火はダイアログ実装クラス側の責務にする
    - `Opened` / `Closing` / `Closed` / `PreloadProgress` を外部購読可能にする
    - パラメーター受け取りは `IDialogReceiver<TParam>.OnOpenAsync(TParam)` で統一
-8. **同種ダイアログの多重表示を許可**
-   - メッセージ違いの Confirm を同時に複数重ねられる前提にする
-9. **`WaitForCloseAsync()` は待機 API + null 戻り**
-   - ユーザー操作で閉じるまで待機し、`CloseAll` で閉じられた場合は `null` を返す
+8. **同種ダイアログの多重表示は常に許可**
+   - 制御フラグは設けず、同じ型のダイアログを複数同時に開ける前提とする
+9. **`WaitForCloseAsync()` は待機 API・エラー時は例外**
+   - ユーザー操作で閉じるまで待機し、結果を非nullable で返す
+   - `CloseAll` などで外部から強制終了された場合は `OperationCanceledException` をスローする
 10. **1行で完結するショートハンドも用意**
-   - `OpenWithCloseAsync` で Open→設定→Close待機(WaitForClose) をまとめて実行できる
+    - `OpenWithCloseAsync` で Open→設定→Close待機(WaitForClose) をまとめて実行できる
+    - `configure` は `Func<TDialog, Task>` とし、非同期の UI 初期化にも対応
 11. **強制クローズ API は Manager 側に分離**
-   - `CloseTopAsync` / `CloseAllAsync` を管理系 API として提供
+    - `CloseTopAsync` / `CloseAllAsync` を管理系 API として提供
 
 ### 使用イメージ
 
 ```csharp
-var confirmDialog = await UrsaCore.Dialog.OpenAsync<ConfirmDialog, ConfirmParam, bool>(
+var confirmDialog = await UrsaCore.Dialog.OpenAsync<ConfirmDialog, bool>(
     new ConfirmParam { Title = "破棄しますか？" });
 
 confirmDialog.SetMessage("この操作は取り消せません");
 confirmDialog.Opened += () => Debug.Log("Confirm opened");
 confirmDialog.Closed += reason => Debug.Log($"Confirm closed: {reason}");
 
-bool? result = await confirmDialog.WaitForCloseAsync(); // ユーザーが閉じるまで待機。CloseAll時は null
-if (result == true)
+try
 {
-    await UrsaCore.Scene.PopAsync();
+    bool result = await confirmDialog.WaitForCloseAsync(); // ユーザーが閉じるまで待機
+    if (result)
+    {
+        await UrsaCore.Scene.PopAsync();
+    }
+}
+catch (OperationCanceledException)
+{
+    // CloseAll などで強制終了された場合
 }
 ```
 
-ショートハンド版（要望の `OpenWithCloseAsync`）:
+ショートハンド版（`OpenWithCloseAsync`）:
 
 ```csharp
-bool? isOk = await UrsaCore.Dialog.OpenWithCloseAsync<ConfirmDialog, ConfirmParam, bool>(
-    new ConfirmParam { Title = "破棄しますか？" },
-    dialog => dialog.SetMessage("この操作は取り消せません"));
-
-if (isOk == true)
+try
 {
-    await UrsaCore.Scene.PopAsync();
+    bool isOk = await UrsaCore.Dialog.OpenWithCloseAsync<ConfirmDialog, bool>(
+        new ConfirmParam { Title = "破棄しますか？" },
+        async dialog => await dialog.SetMessageAsync("この操作は取り消せません"));
+
+    if (isOk)
+    {
+        await UrsaCore.Scene.PopAsync();
+    }
+}
+catch (OperationCanceledException)
+{
+    // CloseAll などで強制終了された場合
 }
 ```
 
 シーン跨ぎのシステムエラー表示例（`DontDestroyOnLoad` 配置）:
 
 ```csharp
-await UrsaCore.Dialog.OpenWithCloseAsync<SystemErrorDialog, SystemErrorParam, Unit>(
+await UrsaCore.Dialog.OpenWithCloseAsync<SystemErrorDialog, Unit>(
     new SystemErrorParam
     {
         Message = "通信に失敗しました",
@@ -593,9 +607,7 @@ public class ConfirmParam : IDialogParameter, IDialogResourcePreloader, IDialogR
 ### 先に決めると良い設計ポイント
 
 - 同時表示数の上限（無制限か、上限Nか）
-- `CloseAll` 時の返り値方針（この提案では `null`）
 - タイムアウト時の扱い（`Timeout` を `Cancel` 扱いにするか）
 - 背面ダイアログの入力ロックポリシー（最前面のみ操作可能にするか）
 - `DontDestroyOnLoad` ダイアログの寿命管理（いつ自動Closeするか）
 - 事前DL失敗時の方針（リトライ/フォールバック/即Close）
-
