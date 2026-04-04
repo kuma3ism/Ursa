@@ -113,16 +113,15 @@ namespace Ursa
         }
 
         /// <summary>
-        /// 指定した TransitionType に対応するプレハブを返します。
+        /// 指定した名前に対応するプレハブを返します。null または空文字の場合は null を返します。
         /// </summary>
-        public TransitionEffectBase GetTransitionPrefab(TransitionType type)
+        public TransitionEffectBase GetTransitionPrefab(string name)
         {
-            if (Transitions == null || type == TransitionType.Default) return null;
+            if (Transitions == null || string.IsNullOrEmpty(name)) return null;
 
-            string typeName = type.ToString();
             foreach (var entry in Transitions)
             {
-                if (entry.Name == typeName) return entry.Prefab;
+                if (entry.Name == name) return entry.Prefab;
             }
             return null;
         }

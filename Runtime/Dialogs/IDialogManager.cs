@@ -87,7 +87,7 @@ namespace Ursa
     public interface IDialogReceiver<TParam> : IDialogReceiverBase
         where TParam : IDialogParameter
     {
-        new Task OnOpenAsync(TParam param);
+        Task OnOpenAsync(TParam param);
     }
 
     /// <summary>結果付きの型付きパラメーターを受け取る契約</summary>

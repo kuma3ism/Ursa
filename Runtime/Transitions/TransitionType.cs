@@ -1,16 +1,14 @@
 namespace Ursa.Transitions
 {
     /// <summary>
-    /// 基本的なトランジションタイプ Enum。
-    /// （ユーザーが独自で拡張する場合は、手動で追加するか別機構を用いる）
+    /// 組み込みトランジション名の定数。UrsaSettings に登録された名前と対応します。
     /// </summary>
-    public enum TransitionType
+    public static class TransitionType
     {
-        Default,
-        Fade,
-        Wipe,
-        Circle,
-        Dissolve,
-        Animator
+        public const string Fade     = "Fade";
+        public const string Wipe     = "Wipe";
+        public const string Circle   = "Circle";
+        public const string Dissolve = "Dissolve";
+        public const string Animator = "Animator";
     }
 }
