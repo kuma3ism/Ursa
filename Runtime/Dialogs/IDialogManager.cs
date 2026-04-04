@@ -109,7 +109,7 @@ namespace Ursa
 
     /// <summary>
     /// ダイアログのライフサイクルイベントを外部へ公開する契約。
-    /// SceneBase の ISceneBackHandler / ISceneTransitionHandler と同じ思想。
+    /// SceneBase の ISceneBackHandler と同じ思想。
     /// </summary>
     public interface IDialogLifecycleEvents
     {

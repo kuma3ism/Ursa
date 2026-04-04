@@ -273,14 +273,6 @@ using Ursa.Scenes;
 {i}        await Task.CompletedTask;
 {i}    }}
 
-{i}    public override void OnTransitionOutCompleted()
-{i}    {{
-{i}    }}
-
-{i}    public override void OnTransitionInStarted()
-{i}    {{
-{i}    }}
-
 {i}    protected override async Task OnBackKeyPressed()
 {i}    {{
 {i}        await CloseAsync();

@@ -127,12 +127,16 @@ public class MyScene : SceneBase<MySceneParameter>
 
 ## シーン遷移 API
 
-すべての操作は `UrsaCore.Scene` 経由で行います。
+すべての操作は `UrsaCore.Scene` 経由で行います。  
+`transitionName` を省略するとデフォルトで **Fade** が使用されます。
 
 ### Push（重ねる）
 
 ```csharp
 await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter());
+
+// トランジションを指定する場合
+await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter(), TransitionType.Dissolve);
 ```
 
 ### Pop（戻る）
@@ -208,8 +212,6 @@ await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 | `OnResumeScene()` | 前面シーンが閉じて自分が最前面に戻った時。トランジション有無に関わらず発火 |
 | `OnPauseScene()` | 自分の上に別シーンが重なった時（OnResumeScene の逆）。トランジション有無に関わらず発火 |
 | `OnSceneWillClose()` | CloseAsync() が呼ばれる直前 |
-| `OnTransitionOutCompleted()` | トランジションのアウト演出完了後（画面が完全に隠れた後）。トランジションなしの場合は呼ばれない |
-| `OnTransitionInStarted()` | トランジションのイン演出開始直前。トランジションなしの場合は呼ばれない |
 | `OnBackKeyPressed()` | バックキー（Escape / Android バックキー）押下時 |
 | `OnDestroy()` | GameObject が破棄される時（Unity標準） |
 
@@ -250,6 +252,9 @@ protected override async Task OnBackKeyPressed()
 パラメーターに `ISceneResourcePreloader` を追加すると、シーンロードと**並行して**事前DLが走ります。  
 `PushAsync` / `ReplaceAsync` / `CreateSceneAsync` 呼び出し時に自動実行されます。
 
+解放処理が必要な場合は `ISceneResourceUnloader` も追加します。シーン破棄時（`OnDestroy`）に自動で呼ばれます。  
+どちらか片方だけの実装も可能です。
+
 ```csharp
 public class MyParameter : ISceneParameter, ISceneResourcePreloader, ISceneResourceUnloader
 {
@@ -278,25 +283,38 @@ protected override async Task OnInitializeAsync(MyParameter parameter)
 
 ## トランジション
 
-シーン遷移時にフェードなどの演出を挟むことができます。
+シーン遷移時にフェードなどの演出を挟むことができます。  
+デフォルトは **Fade** です。トランジションなしで遷移したい場合は `null` を渡してください。
 
-### セットアップ
+```csharp
+await UrsaCore.Scene.PushAsync<NextScene>(param);                         // Fade（デフォルト）
+await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Dissolve); // Dissolve
+await UrsaCore.Scene.PushAsync<NextScene>(param, null);                    // トランジションなし
+```
 
-シーンの任意の GameObject に **`TransitionController`** コンポーネントを追加します（Inspector 右クリック → `Ursa/Transition Controller`）。
+### 組み込みトランジション名
 
-追加すると `FadeTransitionEffect` Prefab が **Effect Prefab** フィールドに自動アサインされます。
+`TransitionType` は文字列定数クラスです。`UrsaSettings` に登録された名前と対応します。
 
-> `TransitionController` が見つからない場合はトランジションなしで遷移します（エラーにはなりません）。
+| 定数 | 文字列値 | 演出 |
+|---|---|---|
+| `TransitionType.Fade` | `"Fade"` | 画面全体がじわっと黒くなる（デフォルト） |
+| `TransitionType.Wipe` | `"Wipe"` | 左から右に黒が流れる |
+| `TransitionType.Circle` | `"Circle"` | 中心から黒い円が広がる |
+| `TransitionType.Dissolve` | `"Dissolve"` | ランダムにパラパラ黒くなる |
+| `TransitionType.Animator` | `"Animator"` | Animator で制御するカスタム演出 |
 
-### 同梱 Prefab
+### UrsaSettings
 
-| Prefab | 演出 |
-|---|---|
-| `FadeTransitionEffect` | 画面全体がじわっと黒くなる（デフォルト） |
-| `AnimatorTransitionEffect` | Animator で制御するカスタム演出 |
-| `ShaderWipeTransitionEffect` | 左から右に黒が流れる |
-| `ShaderCircleTransitionEffect` | 中心から黒い円が広がる |
-| `ShaderDissolveTransitionEffect` | ランダムにパラパラ黒くなる |
+`Assets/Resources/Ursa/UrsaSettings.asset` でトランジション名とプレハブのマッピングを管理しています。  
+エディター初回起動時に同梱プレハブが自動登録されます。独自のトランジションを追加する場合は Inspector から直接登録できます。
+
+### シーン固有のトランジション（TransitionController）
+
+シーンの任意の GameObject に **`TransitionController`** コンポーネントを追加すると、  
+`transitionName` が UrsaSettings に見つからない場合のフォールバックとして使用されます。
+
+> `TransitionController` も UrsaSettings にも該当するエフェクトがない場合はトランジションなしで遷移します（エラーにはなりません）。
 
 ### カスタム演出を作る
 
@@ -308,6 +326,12 @@ public class MyTransition : TransitionEffectBase
     public override async Task PlayOutAsync() { /* 画面を覆う演出 */ }
     public override async Task PlayInAsync()  { /* 画面を開ける演出 */ }
 }
+```
+
+作成したプレハブを UrsaSettings の Transitions リストに任意の名前で登録すると、その名前で呼び出せます。
+
+```csharp
+await UrsaCore.Scene.PushAsync<NextScene>(param, "MyCustomTransition");
 ```
 
 ### Prefab の再生成（開発者向け）

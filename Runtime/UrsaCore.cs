@@ -164,16 +164,4 @@ namespace Ursa
         void OnPauseScene();
     }
 
-    /// <summary>
-    /// トランジション演出のフェーズ通知を受け取るインターフェース。
-    /// トランジションがない場合は呼ばれません。
-    /// </summary>
-    public interface ISceneTransitionHandler
-    {
-        /// <summary>トランジションのアウト演出が完了し、画面が完全に隠れた後に呼ばれます。</summary>
-        void OnTransitionOutCompleted();
-
-        /// <summary>トランジションのイン演出が始まる直前に呼ばれます。</summary>
-        void OnTransitionInStarted();
-    }
 }
