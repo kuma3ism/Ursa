@@ -37,10 +37,9 @@ namespace Ursa
                     UnityEditor.AssetDatabase.CreateAsset(_instance, $"{dir}/UrsaSettings.asset");
                 }
 
-                // トランジション設定が空の場合は自動でプレファブを探してセットする
-                if (_instance.Transitions == null || _instance.Transitions.Count == 0)
+                // 未登録のデフォルトトランジションを補完する
+                if (_instance.SetupDefaultTransitions())
                 {
-                    _instance.SetupDefaultTransitions();
                     UnityEditor.EditorUtility.SetDirty(_instance);
                     UnityEditor.AssetDatabase.SaveAssets();
                     UnityEditor.AssetDatabase.Refresh();
@@ -52,47 +51,58 @@ namespace Ursa
         }
 
 #if UNITY_EDITOR
-        private void SetupDefaultTransitions()
+        /// <summary>
+        /// 未登録のデフォルトトランジションをリストに補完します。
+        /// 既存エントリは変更しません。
+        /// </summary>
+        /// <returns>1件以上追加された場合は true。</returns>
+        private bool SetupDefaultTransitions()
         {
             Transitions ??= new List<TransitionEntry>();
-            Transitions.Clear();
 
-            // パス決め打ちをやめ、型名で検索する（パッケージ配布時も Packages/ 以下を検索できる）
             var targets = new[]
             {
                 ("Fade",     "FadeTransitionEffect"),
                 ("Wipe",     "ShaderWipeTransitionEffect"),
                 ("Circle",   "ShaderCircleTransitionEffect"),
                 ("Dissolve", "ShaderDissolveTransitionEffect"),
+                ("Mask",     "ShaderMaskTransitionEffect"),
                 ("Animator", "AnimatorTransitionEffect"),
             };
 
+            bool dirty = false;
             foreach (var (name, typeName) in targets)
             {
-                // t:prefab + 型名で検索。Assets/ と Packages/ 両方がヒットする
+                // 既に同名で登録済みならスキップ
+                bool exists = false;
+                foreach (var entry in Transitions)
+                {
+                    if (entry.Name == name) { exists = true; break; }
+                }
+                if (exists) continue;
+
+                // プレハブを検索して追加
                 var guids = UnityEditor.AssetDatabase.FindAssets($"{typeName} t:prefab");
                 TransitionEffectBase prefab = null;
                 foreach (var guid in guids)
                 {
                     var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
                     var candidate = UnityEditor.AssetDatabase.LoadAssetAtPath<TransitionEffectBase>(path);
-                    if (candidate != null)
-                    {
-                        prefab = candidate;
-                        break;
-                    }
+                    if (candidate != null) { prefab = candidate; break; }
                 }
 
                 if (prefab != null)
                 {
                     Transitions.Add(new TransitionEntry { Name = name, Prefab = prefab });
                     Debug.Log($"[Ursa] Auto attached transition prefab: {name}");
+                    dirty = true;
                 }
                 else
                 {
                     Debug.LogWarning($"[Ursa] Transition prefab not found: {typeName}");
                 }
             }
+            return dirty;
         }
 #endif
 
