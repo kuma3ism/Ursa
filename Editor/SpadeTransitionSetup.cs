@@ -39,6 +39,21 @@ namespace Ursa.Editor
             }
             var spadeSprite = AssetDatabase.LoadAssetAtPath<Sprite>(SpritePath);
 
+            // 既存アセットを削除して再生成できるようにする
+            var overwriteTargets = new[]
+            {
+                $"{AnimFolder}/{PrefabName}_Idle.anim",
+                $"{AnimFolder}/{PrefabName}_Out.anim",
+                $"{AnimFolder}/{PrefabName}_In.anim",
+                $"{AnimFolder}/{PrefabName}.controller",
+                $"{PrefabFolder}/{PrefabName}.prefab",
+            };
+            foreach (var path in overwriteTargets)
+            {
+                if (AssetDatabase.LoadAssetAtPath<Object>(path) != null)
+                    AssetDatabase.DeleteAsset(path);
+            }
+
             // ---- Idle clip（スケール 0 で待機、背景 alpha=0）----
             var idleClip = new AnimationClip { name = $"{PrefabName}_Idle" };
             idleClip.wrapMode = WrapMode.Loop;
@@ -55,25 +70,25 @@ namespace Ursa.Editor
             // ---- Out clip（スペードが 0→15 に拡大しながら黒背景が出現, 0.5s）----
             var outClip = new AnimationClip { name = $"{PrefabName}_Out" };
             outClip.SetCurve("", typeof(CanvasGroup), "m_Alpha",
-                AnimationCurve.EaseInOut(0f, 0f, 0.5f, 1f));
+                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 1f));
             outClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.x",
-                AnimationCurve.EaseInOut(0f, 0f, 0.5f, 15f));
+                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 15f));
             outClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.y",
-                AnimationCurve.EaseInOut(0f, 0f, 0.5f, 15f));
+                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 15f));
             outClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.z",
-                new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(0.5f, 1f)));
+                new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(2.0f, 1f)));
             AssetDatabase.CreateAsset(outClip, $"{AnimFolder}/{PrefabName}_Out.anim");
 
             // ---- In clip（スペードが 15→0 に縮小しながら黒背景が消える, 0.5s）----
             var inClip = new AnimationClip { name = $"{PrefabName}_In" };
             inClip.SetCurve("", typeof(CanvasGroup), "m_Alpha",
-                AnimationCurve.EaseInOut(0f, 1f, 0.5f, 0f));
+                AnimationCurve.EaseInOut(0f, 1f, 2.0f, 0f));
             inClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.x",
-                AnimationCurve.EaseInOut(0f, 15f, 0.5f, 0f));
+                AnimationCurve.EaseInOut(0f, 15f, 2.0f, 0f));
             inClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.y",
-                AnimationCurve.EaseInOut(0f, 15f, 0.5f, 0f));
+                AnimationCurve.EaseInOut(0f, 15f, 2.0f, 0f));
             inClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.z",
-                new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(0.5f, 1f)));
+                new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(2.0f, 1f)));
             AssetDatabase.CreateAsset(inClip, $"{AnimFolder}/{PrefabName}_In.anim");
 
             AssetDatabase.SaveAssets();
