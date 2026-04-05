@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Ursa.Scenes;
+using Ursa;
 
 namespace Ursa.Editor
 {

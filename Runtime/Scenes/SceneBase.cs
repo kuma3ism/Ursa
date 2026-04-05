@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Ursa.Scenes
+namespace Ursa
 {
     /// <summary>
     /// 戻り値を持たない、標準的なシーンのベースクラス。

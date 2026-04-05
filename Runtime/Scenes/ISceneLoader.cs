@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
 
-namespace Ursa.Scenes
+namespace Ursa
 {
     /// <summary>
     /// シーンのロードとアンロードを抽象化するインターフェース。

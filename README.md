@@ -9,8 +9,8 @@ Unityの俺俺フレームワーク
   - 引数：起動時に引数を渡せる
   - トランジション：複数の候補から選択可能
   - シーンジェネレーター：シーンを自動作成
-- ポップアップ管理（実装率０％）
-- 音声管理（実装率０％）
+- ポップアップ管理（未実装）
+- 音声管理（未実装）
  
 ## UPM インストール
 
@@ -287,9 +287,9 @@ protected override async Task OnInitializeAsync(MyParameter parameter)
 デフォルトは **Fade** です。トランジションなしで遷移したい場合は `null` を渡してください。
 
 ```csharp
-await UrsaCore.Scene.PushAsync<NextScene>(param);                         // Fade（デフォルト）
-await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Dissolve); // Dissolve
-await UrsaCore.Scene.PushAsync<NextScene>(param, null);                    // トランジションなし
+await UrsaCore.Scene.PushAsync<NextScene>(param);                      // Fade（デフォルト）
+await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Spade); // Spade
+await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // トランジションなし
 ```
 
 ### 組み込みトランジション名
@@ -301,8 +301,7 @@ await UrsaCore.Scene.PushAsync<NextScene>(param, null);                    // �
 | `TransitionType.Fade` | `"Fade"` | 画面全体がじわっと黒くなる（デフォルト） |
 | `TransitionType.Wipe` | `"Wipe"` | 左から右に黒が流れる |
 | `TransitionType.Circle` | `"Circle"` | 中心から黒い円が広がる |
-| `TransitionType.Dissolve` | `"Dissolve"` | ランダムにパラパラ黒くなる |
-| `TransitionType.Animator` | `"Animator"` | Animator で制御するカスタム演出 |
+| `TransitionType.Spade` | `"Spade"` | スペードが中央から拡大・縮小する（Animator） |
 
 ### UrsaSettings
 
@@ -336,7 +335,10 @@ await UrsaCore.Scene.PushAsync<NextScene>(param, "MyCustomTransition");
 
 ### Prefab の再生成（開発者向け）
 
-Scripting Define Symbols に `URSA_DEVELOPER` を追加すると `Ursa/Create Transition Prefabs` メニューが現れます。
+| メニュー | 用途 |
+|---|---|
+| `Ursa/Setup Spade Transition` | Spade トランジションのアニメーション・コントローラー・プレハブを再生成 |
+| `Ursa/Create Transition Prefabs` | 全トランジションプレハブを再生成（`URSA_DEVELOPER` 定義が必要） |
 
 ---
 

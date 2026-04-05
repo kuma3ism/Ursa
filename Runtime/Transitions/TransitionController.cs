@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEditor;
 #endif
 
-namespace Ursa.Transitions
+namespace Ursa
 {
     /// <summary>
     /// 遷移エフェクトを <see cref="TransitionEffectBase"/> の実装に委譲するコンポーネント。

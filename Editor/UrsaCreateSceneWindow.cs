@@ -249,7 +249,6 @@ namespace Ursa.Editor
             return
 $@"using System.Threading.Tasks;
 using Ursa;
-using Ursa.Scenes;
 
 {nsOpen}{i}public class {name} : SceneBase<{name}.Parameter>
 {i}{{

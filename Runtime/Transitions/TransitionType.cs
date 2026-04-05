@@ -1,4 +1,4 @@
-namespace Ursa.Transitions
+namespace Ursa
 {
     /// <summary>
     /// 組み込みトランジション名の定数。UrsaSettings に登録された名前と対応します。
@@ -8,7 +8,6 @@ namespace Ursa.Transitions
         public const string Fade     = "Fade";
         public const string Wipe     = "Wipe";
         public const string Circle   = "Circle";
-        public const string Mask     = "Mask";
         public const string Spade    = "Spade";
     }
 }

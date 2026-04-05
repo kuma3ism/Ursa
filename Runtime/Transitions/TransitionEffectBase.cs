@@ -1,7 +1,8 @@
 using System.Threading.Tasks;
 using UnityEngine;
+using Ursa.Transitions;
 
-namespace Ursa.Transitions
+namespace Ursa
 {
     /// <summary>
     /// トランジションエフェクトの MonoBehaviour 基底クラス。

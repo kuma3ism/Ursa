@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Ursa;
+using Ursa.Scenes;
 using Ursa.Transitions;
 
-namespace Ursa.Scenes
+namespace Ursa
 {
     /// <summary>
     /// 履歴エントリの実装
