@@ -4,6 +4,19 @@ using UnityEngine;
 namespace Ursa.Editor
 {
     /// <summary>
+    /// エディター起動時に UrsaSettings を初期化し、未登録のデフォルトトランジションを補完します。
+    /// </summary>
+    [InitializeOnLoad]
+    internal static class UrsaSettingsInitializer
+    {
+        static UrsaSettingsInitializer()
+        {
+            // コンパイル直後は AssetDatabase が使えないので遅延実行
+            EditorApplication.delayCall += () => { var _ = global::Ursa.UrsaSettings.Instance; };
+        }
+    }
+
+    /// <summary>
     /// メニューから開いて UrsaSettings 全体を設定・編集するための専用ウィンドウ
     /// </summary>
     public class UrsaSettingsEditorWindow : EditorWindow

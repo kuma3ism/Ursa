@@ -9,7 +9,6 @@ namespace Ursa.Transitions
         public const string Wipe     = "Wipe";
         public const string Circle   = "Circle";
         public const string Mask     = "Mask";
-        public const string Animator = "Animator";
         public const string Spade    = "Spade";
     }
 }
