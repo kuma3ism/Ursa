@@ -9,6 +9,7 @@ Unityの俺俺フレームワーク
   - 引数：起動時に引数を渡せる
   - トランジション：複数の候補から選択可能
   - シーンジェネレーター：シーンを自動作成
+- ダイアログ管理
 - ポップアップ管理（未実装）
 - 音声管理（未実装）
  
@@ -375,3 +376,230 @@ UrsaCore.Initialize(new UrsaSceneManager(logger: new MyLogger()));
 // Addressables と組み合わせる場合
 UrsaCore.Initialize(new UrsaSceneManager(new MyAddressablesSceneLoader(), new MyLogger()));
 ```
+
+---
+
+## ダイアログ管理
+
+シーンとは独立したスタック管理で、確認ダイアログ・ローディング表示・システムエラーなどに利用できます。
+
+### セットアップ
+
+`UrsaCore.Initialize(new UrsaDialogManager(...))` でダイアログ管理システムを初期化します。
+
+```csharp
+[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+private static void Initialize()
+{
+    UrsaCore.Initialize(new UrsaSceneManager());
+    UrsaCore.Initialize(new UrsaDialogManager());
+}
+```
+
+`UrsaDialogManager` のコンストラクタには以下の引数を渡せます。
+
+| 引数 | 型 | 説明 |
+|---|---|---|
+| `defaultParent` | `RectTransform` | ダイアログを配置する親。省略すると DontDestroyOnLoad な Canvas が自動生成されます |
+| `loader` | `IDialogLoader` | Prefab ローダー。省略すると `ResourcesDialogLoader`（後述）が使われます |
+| `logger` | `IUrsaLogger` | ロガー。省略すると NullLogger（`URSA_LOG` 定義時は UnityDebugLogger） |
+
+### Prefab の配置
+
+デフォルトの `ResourcesDialogLoader` は `Resources/Dialogs/{ダイアログクラス名}.prefab` を読み込みます。
+
+```
+Assets/Resources/Dialogs/ConfirmDialog.prefab   ← ConfirmDialog クラスに対応
+Assets/Resources/Dialogs/LoadingDialog.prefab   ← LoadingDialog クラスに対応
+```
+
+パスを変えたい場合はコンストラクタの `basePath` を指定します。
+
+```csharp
+new UrsaDialogManager(loader: new ResourcesDialogLoader("UI/Popups"));
+```
+
+### ダイアログの作り方
+
+#### 1. パラメーターの定義
+
+```csharp
+public class ConfirmDialogParameter : IDialogParameter
+{
+    public string Message;
+
+    // バリア（背景）タップで閉じることを許可する場合
+    bool IDialogParameter.BarrierDismissible => true;
+}
+```
+
+`IDialogParameter` のプロパティ：
+
+| プロパティ | デフォルト | 説明 |
+|---|---|---|
+| `IsHistory` | `true` | 履歴スタックに積むかどうか。`false` にすると積まれません |
+| `BarrierDismissible` | `false` | バリア（背景）タップで閉じることを許可するか |
+| `Placement` | `Scene` | `Scene`（defaultParent に配置）または `DontDestroyOnLoad` |
+
+#### 2. ダイアログクラスの定義
+
+**戻り値あり**（確認ダイアログなど）：
+
+```csharp
+public class ConfirmDialog : DialogBase<ConfirmDialogParameter, bool>
+{
+    [SerializeField] private TMP_Text _messageText;
+
+    protected override Task OnOpenAsync(ConfirmDialogParameter param)
+    {
+        _messageText.text = param.Message;
+        return Task.CompletedTask;
+    }
+
+    // 「OK」ボタン
+    public void OnOkPressed() => _ = CloseAsync(true);
+
+    // 「キャンセル」ボタン
+    public void OnCancelPressed() => _ = CloseAsync(false);
+}
+```
+
+**戻り値なし**（通知・ローディングダイアログなど）：
+
+```csharp
+public class LoadingDialog : DialogBase<LoadingParameter>
+{
+    protected override Task OnOpenAsync(LoadingParameter param)
+    {
+        // ローディング表示の初期化など
+        return Task.CompletedTask;
+    }
+}
+```
+
+> **【重要】** Unityの仕様上、`Awake()` / `Start()` は `OnOpenAsync` より先に呼ばれます。  
+> パラメーターを参照する初期化処理は必ず `OnOpenAsync()` に書いてください。
+
+### ダイアログ API
+
+すべての操作は `UrsaCore.Dialog` 経由で行います。
+
+#### OpenWithCloseAsync（開いて結果を受け取る）
+
+ダイアログを開き、閉じられるまで待機してから結果を受け取ります。
+
+```csharp
+bool result = await UrsaCore.Dialog.OpenWithCloseAsync<ConfirmDialog, bool>(
+    new ConfirmDialogParameter { Message = "本当に削除しますか？" }
+);
+
+if (result)
+{
+    // OK が押された
+}
+```
+
+`configure` で開いた後の追加設定（非同期 UI 初期化など）も可能です：
+
+```csharp
+bool result = await UrsaCore.Dialog.OpenWithCloseAsync<ConfirmDialog, bool>(
+    new ConfirmDialogParameter { Message = "削除しますか？" },
+    configure: async dialog =>
+    {
+        await dialog.SetupAsync(); // 非同期の追加初期化
+    }
+);
+```
+
+#### OpenAsync（開くだけ）
+
+ダイアログを開いたまま他の処理を続けたい場合に使います。
+
+```csharp
+// 戻り値あり
+LoadingDialog loading = await UrsaCore.Dialog.OpenAsync<LoadingDialog>(new LoadingParameter());
+
+await SomeHeavyWorkAsync();
+
+await UrsaCore.Dialog.CloseTopAsync();
+
+// 閉じるまで任意のタイミングで待機することも可能
+bool result = await UrsaCore.Dialog.OpenAsync<ConfirmDialog, bool>(param)
+                                    .WaitForCloseAsync(); // ← 別途待機
+```
+
+#### CloseTopAsync / CloseAllAsync
+
+```csharp
+// 最前面のダイアログを閉じる
+await UrsaCore.Dialog.CloseTopAsync();
+
+// 全ダイアログを閉じる
+await UrsaCore.Dialog.CloseAllAsync();
+
+// 理由を指定する場合
+await UrsaCore.Dialog.CloseTopAsync(DialogCloseReason.Timeout);
+```
+
+#### 状態の参照
+
+```csharp
+if (UrsaCore.Dialog.IsTransitioning) return;
+if (UrsaCore.Dialog.HasAnyDialog) return;
+
+foreach (var entry in UrsaCore.Dialog.History)
+    Debug.Log($"[{entry.Index}] {entry.DialogName}");
+```
+
+### DialogCloseReason
+
+`OnCloseAsync` や `CloseTopAsync` / `CloseAllAsync` に渡す、ダイアログが閉じられた理由です。
+
+| 値 | 説明 |
+|---|---|
+| `Programmatic` | コードから明示的に閉じた（デフォルト） |
+| `BackKey` | バックキー（Escape / Android バックキー）で閉じた |
+| `BarrierTap` | バリア（背景）タップで閉じた |
+| `Submit` | 確定操作（`CloseAsync(result)` 呼び出し）で閉じた |
+| `Cancel` | キャンセル操作で閉じた |
+| `Timeout` | タイムアウトで閉じた |
+
+### override 可能なメソッド一覧
+
+| メソッド | 呼ばれるタイミング |
+|---|---|
+| `OnOpenAsync(TParam)` | ダイアログが開かれた時（パラメーター注入後） |
+| `OnCloseAsync(DialogCloseReason)` | ダイアログが閉じられる直前 |
+| `OnBackKeyPressed()` | バックキー（Escape / Android バックキー）押下時 |
+| `OnDestroy()` | GameObject が破棄される時（Unity標準） |
+
+### リソースの事前ダウンロード
+
+パラメーターに `IDialogResourcePreloader` を追加すると、ダイアログロードと**並行して**事前DLが走ります。
+
+```csharp
+public class MyDialogParameter : IDialogParameter, IDialogResourcePreloader, IDialogResourceUnloader
+{
+    public Sprite Icon;
+
+    public async Task PreloadResourcesAsync(IProgress<float> progress = null)
+    {
+        Icon = await Resources.LoadAsync<Sprite>("Icons/Hoge") as Sprite;
+    }
+
+    public void UnloadResources()
+    {
+        Resources.UnloadAsset(Icon);
+    }
+}
+```
+
+### カスタムダイアログローダー
+
+`IDialogLoader` を実装することで Addressables や AssetBundle に差し替えられます。
+
+```csharp
+UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader()));
+```
+
+---
