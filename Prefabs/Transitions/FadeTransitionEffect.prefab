@@ -129,7 +129,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Ursa.Runtime::Ursa.Transitions.FadeTransitionEffect
   _canvasGroup: {fileID: 8849784730188971294}
-  _settings: {fileID: 0}
+  _outDuration: 0.3
+  _inDuration: 0.3
 --- !u!1 &7185595037963269113
 GameObject:
   m_ObjectHideFlags: 0

@@ -65,9 +65,9 @@ namespace Ursa
                 ("Fade",     "FadeTransitionEffect"),
                 ("Wipe",     "ShaderWipeTransitionEffect"),
                 ("Circle",   "ShaderCircleTransitionEffect"),
-                ("Dissolve", "ShaderDissolveTransitionEffect"),
                 ("Mask",     "ShaderMaskTransitionEffect"),
                 ("Animator", "AnimatorTransitionEffect"),
+                ("Spade",    "SpadeTransitionEffect"),
             };
 
             bool dirty = false;

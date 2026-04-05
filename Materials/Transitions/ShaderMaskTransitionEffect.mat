@@ -34,6 +34,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _Progress: 0
+    - _Softness: 0.05
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1
