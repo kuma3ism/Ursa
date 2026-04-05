@@ -189,5 +189,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Ursa.Runtime::Ursa.Transitions.ShaderTransitionEffect
   _material: {fileID: 2100000, guid: a9de2c25ec45f4cd4ad59dce08d012a8, type: 2}
   _property: _Progress
-  _outDuration: 0.3
-  _inDuration: 0.3
+  _outDuration: 3
+  _inDuration: 3
