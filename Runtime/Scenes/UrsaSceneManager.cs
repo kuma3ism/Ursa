@@ -44,6 +44,8 @@ namespace Ursa
         // Buffers to avoid allocations
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
+        private readonly List<ISceneCloseHandler> _closeHandlerBuffer = new List<ISceneCloseHandler>();
+
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
             _sceneLoader = sceneLoader ?? DefaultEditorLoader ?? new BuildSettingsSceneLoader();
@@ -198,6 +200,7 @@ namespace Ursa
                     PushHistory(newlyLoadedScene, typeof(TScene));
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
+                SubscribeCloseHandlers(newlyLoadedScene);
             }, transitionName);
         }
 
@@ -305,6 +308,8 @@ namespace Ursa
 
                 if (parameter != null)
                     await InjectParameterToScene(newlyLoadedScene, parameter);
+
+                SubscribeCloseHandlers(newlyLoadedScene);
             }, transitionName);
         }
 
@@ -340,6 +345,23 @@ namespace Ursa
                     await receiver.OnEnterScene(parameter);
                 }
             }
+        }
+
+        /// <summary>
+        /// ロードしたシーン内の ISceneCloseHandler を購読します。
+        /// SceneBase.CloseAsync() が呼ばれた際に PopAsync() が実行されるようになります。
+        /// </summary>
+        private void SubscribeCloseHandlers(Scene scene)
+        {
+            scene.GetRootGameObjects(_rootGameObjectBuffer);
+            foreach (var go in _rootGameObjectBuffer)
+            {
+                go.GetComponentsInChildren<ISceneCloseHandler>(true, _closeHandlerBuffer);
+                foreach (var handler in _closeHandlerBuffer)
+                    handler.CloseRequested += () => PopAsync();
+                _closeHandlerBuffer.Clear();
+            }
+            _rootGameObjectBuffer.Clear();
         }
 
         private void NotifyBackToScene()
@@ -455,6 +477,7 @@ namespace Ursa
             if (_history.Count == 0) RegisterInitialScene();
             NotifyPauseScene();
             PushHistory(scene, null);
+            SubscribeCloseHandlers(scene);
             return Task.CompletedTask;
         }
 
@@ -482,6 +505,7 @@ namespace Ursa
                     }
                 }
                 PushHistory(scene, null);
+                SubscribeCloseHandlers(scene);
             }, transitionName);
         }
     }
