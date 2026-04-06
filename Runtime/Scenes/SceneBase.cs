@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -8,7 +9,7 @@ namespace Ursa
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneCloseHandler where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
 
@@ -18,6 +19,20 @@ namespace Ursa
         protected T CurrentParam { get; private set; }
 
         protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
+
+        // ---- ISceneCloseHandler ----
+
+        /// <summary>
+        /// CloseAsync() が呼ばれた際に発火します。
+        /// UrsaSceneManager がこのイベントを購読して実際の PopAsync() を実行します。
+        /// </summary>
+        event Func<Task> ISceneCloseHandler.CloseRequested
+        {
+            add => _closeRequested += value;
+            remove => _closeRequested -= value;
+        }
+
+        private Func<Task> _closeRequested;
 
         // 型なし ISceneReceiver の明示的実装（UrsaSceneManager からリフレクション不要で呼べる）
         async Task ISceneReceiver.OnEnterScene(ISceneParameter parameter)
@@ -86,11 +101,12 @@ namespace Ursa
 
         /// <summary>
         /// 現在最前面にある自分自身のシーンを破棄し、一つ前のシーンに戻ります。
+        /// 実際の Pop 処理は UrsaSceneManager が CloseRequested イベント経由で行います。
         /// </summary>
         public async Task CloseAsync()
         {
             await OnSceneWillClose();
-            await UrsaCore.Scene.PopAsync();
+            await (_closeRequested?.Invoke() ?? Task.CompletedTask);
         }
 
         /// <summary>
