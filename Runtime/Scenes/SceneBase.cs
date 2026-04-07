@@ -8,7 +8,7 @@ namespace Ursa
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
 
@@ -17,16 +17,25 @@ namespace Ursa
 
         protected T CurrentParam { get; private set; }
 
-        protected bool IsTopScene => UrsaCore.Scene.IsTopScene(this.gameObject.scene);
+        private ISceneManager _sceneManager;
 
-        // 型なし ISceneReceiver の明示的実装（UrsaSceneManager からリフレクション不要で呼べる）
+        protected bool IsTopScene => _sceneManager?.IsTopScene(this.gameObject.scene) ?? false;
+
+        // ---- ISceneManagerReceiver ----
+
+        void ISceneManagerReceiver.SetManager(ISceneManager sceneManager)
+        {
+            _sceneManager = sceneManager;
+        }
+
+        // ---- ISceneReceiver ----
+
         async Task ISceneReceiver.OnEnterScene(ISceneParameter parameter)
         {
             CurrentParam = (T)parameter;
             await OnInitializeAsync((T)parameter);
         }
 
-        // 型あり ISceneReceiver<T> の明示的実装
         async Task ISceneReceiver<T>.OnEnterScene(T parameter)
         {
             CurrentParam = parameter;
@@ -52,7 +61,7 @@ namespace Ursa
         internal async Task OpenAsync(T parameter)
         {
             CurrentParam = parameter;
-            await UrsaCore.Scene.PushInstanceAsync(this.gameObject.scene);
+            await _sceneManager.PushInstanceAsync(this.gameObject.scene);
             await OnInitializeAsync(parameter);
         }
 
@@ -63,7 +72,7 @@ namespace Ursa
         public async Task ReplaceAsync(T parameter)
         {
             CurrentParam = parameter;
-            await UrsaCore.Scene.ReplaceInstanceAsync(this.gameObject.scene);
+            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene);
             await OnInitializeAsync(parameter);
         }
 
@@ -90,24 +99,12 @@ namespace Ursa
         public async Task CloseAsync()
         {
             await OnSceneWillClose();
-            await UrsaCore.Scene.PopAsync();
+            await _sceneManager.PopAsync();
         }
 
-        /// <summary>
-        /// 前面に重なっていた別のシーンが閉じられ、再びこのシーンが最前面（アクティブ）になった際に呼ばれます。
-        /// トランジションの有無に関わらず発火します。
-        /// </summary>
-        public virtual void OnResumeScene()
-        {
-        }
+        public virtual void OnResumeScene() { }
 
-        /// <summary>
-        /// 自分の上に別のシーンが重なった際に呼ばれます（OnResumeScene の逆）。
-        /// トランジションの有無に関わらず発火します。
-        /// </summary>
-        public virtual void OnPauseScene()
-        {
-        }
+        public virtual void OnPauseScene() { }
 
         /// <summary>
         /// <c>CloseAsync()</c> が呼ばれ、シーンが閉じられる直前に呼ばれます。
@@ -121,7 +118,7 @@ namespace Ursa
         private void LateUpdate()
         {
             if (!_handleBackKey || !IsTopScene) return;
-            if (UrsaCore.Scene?.IsTransitioning == true) return;
+            if (_sceneManager?.IsTransitioning == true) return;
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 _ = OnBackKeyPressed();
         }

@@ -44,6 +44,8 @@ namespace Ursa
         // Buffers to avoid allocations
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
+        private readonly List<ISceneManagerReceiver> _managerReceiverBuffer = new List<ISceneManagerReceiver>();
+
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
             _sceneLoader = sceneLoader ?? DefaultEditorLoader ?? new BuildSettingsSceneLoader();
@@ -198,6 +200,7 @@ namespace Ursa
                     PushHistory(newlyLoadedScene, typeof(TScene));
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
+                InjectSceneManager(newlyLoadedScene);
             }, transitionName);
         }
 
@@ -305,6 +308,8 @@ namespace Ursa
 
                 if (parameter != null)
                     await InjectParameterToScene(newlyLoadedScene, parameter);
+
+                InjectSceneManager(newlyLoadedScene);
             }, transitionName);
         }
 
@@ -340,6 +345,23 @@ namespace Ursa
                     await receiver.OnEnterScene(parameter);
                 }
             }
+        }
+
+        /// <summary>
+        /// ロードしたシーン内の ISceneManagerReceiver に自分自身を注入します。
+        /// これにより SceneBase は UrsaCore を参照せずに ISceneManager の機能を使えます。
+        /// </summary>
+        private void InjectSceneManager(Scene scene)
+        {
+            scene.GetRootGameObjects(_rootGameObjectBuffer);
+            foreach (var go in _rootGameObjectBuffer)
+            {
+                go.GetComponentsInChildren<ISceneManagerReceiver>(true, _managerReceiverBuffer);
+                foreach (var receiver in _managerReceiverBuffer)
+                    receiver.SetManager(this);
+                _managerReceiverBuffer.Clear();
+            }
+            _rootGameObjectBuffer.Clear();
         }
 
         private void NotifyBackToScene()
@@ -438,8 +460,6 @@ namespace Ursa
 
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
-        /// トランジション演出は未対応のため、transitionName を指定しても無視されます。
-        /// 演出が必要な場合は別途 ExecuteTransitionAsync でラップする拡張を検討してください。
         /// </summary>
         public Task PushInstanceAsync(Scene scene, string transitionName = TransitionType.Fade)
         {
@@ -455,6 +475,7 @@ namespace Ursa
             if (_history.Count == 0) RegisterInitialScene();
             NotifyPauseScene();
             PushHistory(scene, null);
+            InjectSceneManager(scene);
             return Task.CompletedTask;
         }
 
@@ -482,6 +503,7 @@ namespace Ursa
                     }
                 }
                 PushHistory(scene, null);
+                InjectSceneManager(scene);
             }, transitionName);
         }
     }
