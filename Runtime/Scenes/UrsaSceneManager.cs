@@ -44,7 +44,7 @@ namespace Ursa
         // Buffers to avoid allocations
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
-        private readonly List<ISceneCloseHandler> _closeHandlerBuffer = new List<ISceneCloseHandler>();
+        private readonly List<ISceneManagerReceiver> _managerReceiverBuffer = new List<ISceneManagerReceiver>();
 
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
@@ -200,7 +200,7 @@ namespace Ursa
                     PushHistory(newlyLoadedScene, typeof(TScene));
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
-                SubscribeCloseHandlers(newlyLoadedScene);
+                InjectSceneManager(newlyLoadedScene);
             }, transitionName);
         }
 
@@ -309,7 +309,7 @@ namespace Ursa
                 if (parameter != null)
                     await InjectParameterToScene(newlyLoadedScene, parameter);
 
-                SubscribeCloseHandlers(newlyLoadedScene);
+                InjectSceneManager(newlyLoadedScene);
             }, transitionName);
         }
 
@@ -348,18 +348,18 @@ namespace Ursa
         }
 
         /// <summary>
-        /// ロードしたシーン内の ISceneCloseHandler を購読します。
-        /// SceneBase.CloseAsync() が呼ばれた際に PopAsync() が実行されるようになります。
+        /// ロードしたシーン内の ISceneManagerReceiver に自分自身を注入します。
+        /// これにより SceneBase は UrsaCore を参照せずに ISceneManager の機能を使えます。
         /// </summary>
-        private void SubscribeCloseHandlers(Scene scene)
+        private void InjectSceneManager(Scene scene)
         {
             scene.GetRootGameObjects(_rootGameObjectBuffer);
             foreach (var go in _rootGameObjectBuffer)
             {
-                go.GetComponentsInChildren<ISceneCloseHandler>(true, _closeHandlerBuffer);
-                foreach (var handler in _closeHandlerBuffer)
-                    handler.CloseRequested += () => PopAsync();
-                _closeHandlerBuffer.Clear();
+                go.GetComponentsInChildren<ISceneManagerReceiver>(true, _managerReceiverBuffer);
+                foreach (var receiver in _managerReceiverBuffer)
+                    receiver.SetManager(this);
+                _managerReceiverBuffer.Clear();
             }
             _rootGameObjectBuffer.Clear();
         }
@@ -460,8 +460,6 @@ namespace Ursa
 
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
-        /// トランジション演出は未対応のため、transitionName を指定しても無視されます。
-        /// 演出が必要な場合は別途 ExecuteTransitionAsync でラップする拡張を検討してください。
         /// </summary>
         public Task PushInstanceAsync(Scene scene, string transitionName = TransitionType.Fade)
         {
@@ -477,7 +475,7 @@ namespace Ursa
             if (_history.Count == 0) RegisterInitialScene();
             NotifyPauseScene();
             PushHistory(scene, null);
-            SubscribeCloseHandlers(scene);
+            InjectSceneManager(scene);
             return Task.CompletedTask;
         }
 
@@ -505,7 +503,7 @@ namespace Ursa
                     }
                 }
                 PushHistory(scene, null);
-                SubscribeCloseHandlers(scene);
+                InjectSceneManager(scene);
             }, transitionName);
         }
     }
