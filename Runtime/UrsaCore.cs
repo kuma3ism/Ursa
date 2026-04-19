@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using Ursa.Transitions;
+using Ursa.UI;
 
 namespace Ursa
 {
@@ -52,6 +53,14 @@ namespace Ursa
             _dialog ?? throw new InvalidOperationException(
                 "UrsaCore.Dialog is not initialized. Call UrsaCore.Initialize(IDialogManager) first.");
 
+        // ---- UI ----
+
+        private static IUIManager _ui;
+
+        public static IUIManager UI =>
+            _ui ?? throw new InvalidOperationException(
+                "UrsaCore.UI is not initialized. Call UrsaCore.Initialize(IUIManager) first.");
+
         // ---- Settings ----
 
         private static UrsaSettings _settings;
@@ -71,6 +80,7 @@ namespace Ursa
 
         public static bool IsSceneReady => _scene != null;
         public static bool IsDialogReady => _dialog != null;
+        public static bool IsUIReady => _ui != null;
 
         /// <summary>後方互換性のために残します。Scene が初期化済みかどうかを返します。</summary>
         public static bool IsReady => _scene != null;
@@ -91,16 +101,24 @@ namespace Ursa
             _dialog = dialogManager ?? throw new ArgumentNullException(nameof(dialogManager));
         }
 
+        /// <summary>UI 管理システムを初期化します。</summary>
+        public static void Initialize(IUIManager uiManager)
+        {
+            _ui = uiManager ?? throw new ArgumentNullException(nameof(uiManager));
+        }
+
         // ---- Dispose ----
 
         public static void Dispose()
         {
             DisposeScene();
             DisposeDialog();
+            DisposeUI();
         }
 
         private static void DisposeScene() => _scene = null;
         private static void DisposeDialog() => _dialog = null;
+        private static void DisposeUI() => _ui = null;
     }
 
 
