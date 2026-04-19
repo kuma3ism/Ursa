@@ -28,6 +28,7 @@ namespace Ursa.UI
     /// SetOnHoldAsync() で長押しハンドラーをセットします。
     /// onHolding は押している間毎フレーム progress(0.0〜1.0) を受け取ります。
     /// onHoldComplete は設定時間に達したときに一度だけ呼ばれます。
+    /// 長押し完了後は onClick は発火しません。
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Button))]
@@ -55,6 +56,9 @@ namespace Ursa.UI
         private Action<float> _onHolding;
         private Func<CancellationToken, Task> _onHoldComplete;
         private Coroutine _holdCoroutine;
+
+        /// <summary>長押し完了済みフラグ。次の PointerDown でリセット。</summary>
+        private bool _holdCompleted;
 
         // ---- 初期化 / 破棄 ----
 
@@ -94,6 +98,7 @@ namespace Ursa.UI
         /// <summary>
         /// クリック時に呼ばれる async ハンドラーをセットします。
         /// 実行中のハンドラーがある場合はキャンセルされます。
+        /// 長押し完了後は発火しません。
         /// </summary>
         public void SetOnClickAsync(Func<CancellationToken, Task> handler)
         {
@@ -126,6 +131,8 @@ namespace Ursa.UI
 
         void IPointerDownHandler.OnPointerDown(PointerEventData eventData)
         {
+            _holdCompleted = false;
+
             if (_onHolding == null && _onHoldComplete == null) return;
             if (_holdCoroutine != null) StopCoroutine(_holdCoroutine);
             _holdCoroutine = StartCoroutine(HoldCoroutine());
@@ -149,6 +156,7 @@ namespace Ursa.UI
                 yield return null;
             }
 
+            _holdCompleted = true;
             _onHolding?.Invoke(1f);
             _holdCoroutine = null;
 
@@ -191,6 +199,9 @@ namespace Ursa.UI
 
         private async Task InvokeHandlerAsync()
         {
+            // 長押し完了済みの場合はクリックを無視
+            if (_holdCompleted) return;
+
             var ui = ResolveUI();
             var token = GetToken();
 
