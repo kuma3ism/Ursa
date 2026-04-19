@@ -8,11 +8,15 @@ namespace Ursa.UI
 {
     /// <summary>
     /// Unity の Button に async ハンドラーを紐付けるコンポーネント。
-    /// UrsaCore.UI の ExecutionLock と Blocker を使って二重実行とブロック中の操作を防ぎます。
+    /// ExecutionLock と Blocker を使って二重実行とブロック中の操作を防ぎます。
     ///
     /// 【使い方】
-    /// 1. UrsaCore.Initialize(new UrsaUIManager()) を起動時に呼ぶ
+    /// 1. UrsaCore.Initialize(new UrsaUIManager()) を起動時に呼ぶ（または VContainer 等で IUIManager を inject）
     /// 2. Button に AddComponent&lt;UrsaButton&gt;() して SetOnClickAsync() でハンドラーを渡す
+    ///
+    /// 【DI サポート】
+    /// VContainer 等から Construct(IUIManager) で inject することで UrsaCore への依存を排除できます。
+    /// inject されていない場合は UrsaCore.UI にフォールバックします。
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Button))]
@@ -20,8 +24,18 @@ namespace Ursa.UI
     {
         [SerializeField] private Button _button;
 
+        private IUIManager _uiManager;
         private Func<CancellationToken, Task> _handler = _ => Task.CompletedTask;
         private CancellationTokenSource _cts;
+
+        /// <summary>
+        /// VContainer 等の DI コンテナから IUIManager を inject します。
+        /// 呼ばれた場合、UrsaCore.UI へのフォールバックは行いません。
+        /// </summary>
+        public void Construct(IUIManager uiManager)
+        {
+            _uiManager = uiManager;
+        }
 
         private void Awake()
         {
@@ -46,17 +60,23 @@ namespace Ursa.UI
             _handler = handler ?? (_ => Task.CompletedTask);
         }
 
+        private IUIManager ResolveUI()
+        {
+            if (_uiManager != null) return _uiManager;
+            if (UrsaCore.IsUIReady) return UrsaCore.UI;
+            return null;
+        }
+
         private void InvokeHandler() => _ = InvokeHandlerAsync();
 
         private async Task InvokeHandlerAsync()
         {
-            if (!UrsaCore.IsUIReady)
+            var ui = ResolveUI();
+            if (ui == null)
             {
-                Debug.LogWarning("[Ursa] UrsaCore.UI が未初期化です。UrsaCore.Initialize(IUIManager) を呼んでください。", this);
+                Debug.LogWarning("[Ursa] IUIManager が未解決です。UrsaCore.Initialize(IUIManager) を呼ぶか、Construct(IUIManager) で inject してください。", this);
                 return;
             }
-
-            var ui = UrsaCore.UI;
 
             if (ui.Blocker.IsBlocked) return;
             if (!ui.ExecutionLock.TryEnter(out var scope)) return;
