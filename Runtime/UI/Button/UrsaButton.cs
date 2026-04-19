@@ -15,7 +15,7 @@ namespace Ursa.UI
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Button))]
-    public sealed class UrsaButtonBehaviour : MonoBehaviour
+    public sealed class UrsaButton : MonoBehaviour
     {
         [SerializeField] private Button _button;
 
