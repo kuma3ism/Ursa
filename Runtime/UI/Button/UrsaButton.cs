@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,7 +12,7 @@ namespace Ursa.UI
     ///
     /// 【使い方】
     /// 1. UrsaCore.Initialize(new UrsaUIManager()) を起動時に呼ぶ
-    /// 2. Button に AddComponent&lt;UrsaButtonBehaviour&gt;() して SetOnClickAsync() でハンドラーを渡す
+    /// 2. Button に AddComponent&lt;UrsaButton&gt;() して SetOnClickAsync() でハンドラーを渡す
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Button))]
@@ -19,24 +20,30 @@ namespace Ursa.UI
     {
         [SerializeField] private Button _button;
 
-        private Func<Task> _handler = () => Task.CompletedTask;
+        private Func<CancellationToken, Task> _handler = _ => Task.CompletedTask;
+        private CancellationTokenSource _cts;
 
         private void Awake()
         {
+            _cts = new CancellationTokenSource();
             _button ??= GetComponent<Button>();
             _button.onClick.AddListener(InvokeHandler);
         }
 
         private void OnDestroy()
         {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
+
             if (_button != null)
                 _button.onClick.RemoveListener(InvokeHandler);
         }
 
         /// <summary>クリック時に呼ばれる async ハンドラーをセットします。</summary>
-        public void SetOnClickAsync(Func<Task> handler)
+        public void SetOnClickAsync(Func<CancellationToken, Task> handler)
         {
-            _handler = handler ?? (() => Task.CompletedTask);
+            _handler = handler ?? (_ => Task.CompletedTask);
         }
 
         private void InvokeHandler() => _ = InvokeHandlerAsync();
@@ -59,7 +66,11 @@ namespace Ursa.UI
                 ui.Blocker.Enter();
                 try
                 {
-                    await _handler();
+                    await _handler(_cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // OnDestroy によるキャンセルは正常系のため無視
                 }
                 catch (Exception ex)
                 {
