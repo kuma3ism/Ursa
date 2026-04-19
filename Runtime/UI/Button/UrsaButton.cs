@@ -9,7 +9,7 @@ namespace Ursa.UI
     /// <summary>
     /// Unity の Button に async ハンドラーを紐付けるコンポーネント。
     /// IUIManager が解決できる場合は ExecutionLock と Blocker で二重実行とブロック中の操作を防ぎます。
-    /// IUIManager が未解決の場合は UI 管理をスキップしてハンドラーのみ実行します。
+    /// IUIManager が未解決の場合はインスタンス単位のフラグで二重実行を防ぎ、ハンドラーのみ実行します。
     ///
     /// 【使い方】
     /// 1. UrsaCore.Initialize(new UrsaUIManager()) を起動時に呼ぶ（または VContainer 等で IUIManager を inject）
@@ -28,6 +28,7 @@ namespace Ursa.UI
         private IUIManager _uiManager;
         private Func<CancellationToken, Task> _handler = _ => Task.CompletedTask;
         private CancellationTokenSource _cts;
+        private int _isRunning;
 
         /// <summary>
         /// VContainer 等の DI コンテナから IUIManager を inject します。
@@ -102,7 +103,8 @@ namespace Ursa.UI
             }
             else
             {
-                // IUIManager 未解決: UI 管理をスキップしてハンドラーのみ実行
+                // IUIManager 未解決: インスタンス単位のフラグで二重実行を防いでハンドラーのみ実行
+                if (Interlocked.Exchange(ref _isRunning, 1) == 1) return;
                 try
                 {
                     await _handler(_cts.Token);
@@ -114,6 +116,10 @@ namespace Ursa.UI
                 catch (Exception ex)
                 {
                     Debug.LogException(ex, this);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _isRunning, 0);
                 }
             }
         }
