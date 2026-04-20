@@ -41,6 +41,11 @@ namespace Ursa.UI
         /// <summary>ハンドラー差し替え時のキャンセル用。</summary>
         private CancellationTokenSource _handlerCts;
 
+        /// <summary>
+        /// ハンドラー実行中フラグ。インスタンスフィールドのため MonoBehaviour 再生成で自動リセット。
+        /// </summary>
+        private bool _isRunning;
+
         // ---- 長押し ----
 
         private float _holdDuration;
@@ -63,7 +68,7 @@ namespace Ursa.UI
 
         private void Update()
         {
-            UrsaButtonGate.Update();
+            if (_isRunning) UrsaButtonGate.KeepBlocking();
         }
 
         private void OnDestroy()
@@ -182,6 +187,7 @@ namespace Ursa.UI
             if (_holdCompleted) return;
             if (!UrsaButtonGate.TryEnter()) return;
 
+            _isRunning = true;
             var token = GetToken();
             try
             {
@@ -194,7 +200,7 @@ namespace Ursa.UI
             }
             finally
             {
-                UrsaButtonGate.Exit();
+                _isRunning = false;
             }
         }
     }
