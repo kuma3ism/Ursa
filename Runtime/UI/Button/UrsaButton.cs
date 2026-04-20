@@ -30,6 +30,8 @@ namespace Ursa.UI
     public sealed class UrsaButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         [SerializeField] private Button _button;
+        [SerializeField, Min(0f), Tooltip("このボタンの連打防止インターバル（秒）です。0 なら連打防止なし。")]
+        private float _gateInterval = 0.5f;
 
         // ---- クリック ----
 
@@ -40,11 +42,6 @@ namespace Ursa.UI
 
         /// <summary>ハンドラー差し替え時のキャンセル用。</summary>
         private CancellationTokenSource _handlerCts;
-
-        /// <summary>
-        /// ハンドラー実行中フラグ。インスタンスフィールドのため MonoBehaviour 再生成で自動リセット。
-        /// </summary>
-        private bool _isRunning;
 
         // ---- 長押し ----
 
@@ -66,9 +63,9 @@ namespace Ursa.UI
             _button.onClick.AddListener(InvokeHandler);
         }
 
-        private void Update()
+        private void OnValidate()
         {
-            if (_isRunning) UrsaButtonGate.KeepBlocking();
+            _gateInterval = Mathf.Max(0f, _gateInterval);
         }
 
         private void OnDestroy()
@@ -86,6 +83,9 @@ namespace Ursa.UI
         }
 
         // ---- クリック API ----
+
+        /// <summary>このボタンの連打防止インターバル（秒）を設定します。</summary>
+        public void SetGateInterval(float seconds) => _gateInterval = Mathf.Max(0f, seconds);
 
         /// <summary>
         /// クリック時に呼ばれる async ハンドラーをセットします。
@@ -172,26 +172,28 @@ namespace Ursa.UI
 
         // ---- 内部 ----
 
-        private CancellationToken GetToken()
-        {
-            return CancellationTokenSource.CreateLinkedTokenSource(
-                _destroyCts.Token,
-                _handlerCts.Token
-            ).Token;
-        }
-
         private void InvokeHandler() => _ = InvokeHandlerAsync();
 
         private async Task InvokeHandlerAsync()
         {
             if (_holdCompleted) return;
-            if (!UrsaButtonGate.TryEnter()) return;
+            if (!UrsaButtonGate.TryEnter(_gateInterval)) return;
 
-            _isRunning = true;
-            var token = GetToken();
+            UrsaButtonGate.EnterRunning();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                _destroyCts.Token,
+                _handlerCts.Token
+            );
+            var token = linkedCts.Token;
             try
             {
-                await _handler(token);
+                var handlerTask = _handler(token);
+                while (!handlerTask.IsCompleted)
+                {
+                    UrsaButtonGate.TouchRunningBlock();
+                    await Task.WhenAny(handlerTask, Task.Delay(100, token));
+                }
+                await handlerTask;
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -200,7 +202,7 @@ namespace Ursa.UI
             }
             finally
             {
-                _isRunning = false;
+                UrsaButtonGate.ExitRunning();
             }
         }
     }
