@@ -9,21 +9,19 @@ using UnityEngine.UI;
 namespace Ursa.UI
 {
     /// <summary>
-    /// Unity の Button に async ハンドラーを紐付けるコンポーネント。
-    /// UrsaButtonGate により、全ボタン共通の連打防止・処理中ブロックを行います。
-    /// IUIManager への依存はありません。
+    /// Unity の Button に非同期ハンドラーを紐付けるコンポーネント。
     ///
-    /// 【使い方】
-    /// Button に AddComponent&lt;UrsaButton&gt;() して SetOnClickAsync() でハンドラーを渡す
+    /// 【基本的な使い方】
+    /// Button に AddComponent&lt;UrsaButton&gt;() して SetOnClickAsync() でハンドラーを登録します。
     ///
-    /// 【ハンドラーの差し替え】
-    /// SetOnClickAsync() を再度呼ぶと実行中の前のハンドラーがキャンセルされます。
+    /// 【ボタンブロックの種類】
+    /// - セルフボタンブロック: このボタン自身の連打を防ぎます（GateInterval で秒数を設定）。
+    /// - グローバルボタンブロック: いずれかのボタンのハンドラー実行中は全ボタンの入力を遮断します。
+    ///   IgnoreGlobalBlock を有効にすると、このボタンはグローバルブロック中でも押せるようになります。
     ///
     /// 【長押し】
-    /// SetOnHoldAsync() で長押しハンドラーをセットします。
-    /// onHolding は押している間毎フレーム progress(0.0〜1.0) を受け取ります。
-    /// onHoldComplete は設定時間に達したときに一度だけ呼ばれます。
-    /// 長押し完了後は onClick は発火しません。
+    /// SetOnHoldAsync() で長押しハンドラーを登録できます。
+    /// 長押しが完了した場合、クリックハンドラーは発火しません。
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Button))]
@@ -41,10 +39,7 @@ namespace Ursa.UI
 
         private Func<CancellationToken, Task> _handler = _ => Task.CompletedTask;
 
-        /// <summary>MonoBehaviour 破棄時のキャンセル用。</summary>
         private CancellationTokenSource _destroyCts;
-
-        /// <summary>ハンドラー差し替え時のキャンセル用。</summary>
         private CancellationTokenSource _handlerCts;
 
         // ---- 長押し ----
@@ -53,8 +48,6 @@ namespace Ursa.UI
         private Action<float> _onHolding;
         private Func<CancellationToken, Task> _onHoldComplete;
         private Coroutine _holdCoroutine;
-
-        /// <summary>長押し完了済みフラグ。次の PointerDown でリセット。</summary>
         private bool _holdCompleted;
 
         // ---- 初期化 / 破棄 ----
@@ -88,34 +81,35 @@ namespace Ursa.UI
 
         // ---- クリック API ----
 
-        /// <summary>このボタンの連打防止インターバル（秒）を設定します（セルフボタンブロック）。</summary>
-        public void SetGateInterval(float seconds) => _gateInterval = Mathf.Max(0f, seconds);
-
-        /// <summary>グローバルボタンブロックを無視するかどうかを設定します。</summary>
-        public void SetIgnoreGlobalBlock(bool ignore) => _ignoreGlobalBlock = ignore;
-
         /// <summary>
-        /// クリック時に呼ばれる async ハンドラーをセットします。
-        /// 実行中のハンドラーがある場合はキャンセルされます。
-        /// 長押し完了後は発火しません。
+        /// クリック時に実行する非同期ハンドラーを登録します。
+        /// 再度呼ぶと前のハンドラーはキャンセルされます。
         /// </summary>
         public void SetOnClickAsync(Func<CancellationToken, Task> handler)
         {
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
             _handlerCts = new CancellationTokenSource();
-
             _handler = handler ?? (_ => Task.CompletedTask);
         }
+
+        /// <summary>連打防止インターバル（秒）を設定します（セルフボタンブロック）。</summary>
+        public void SetGateInterval(float seconds) => _gateInterval = Mathf.Max(0f, seconds);
+
+        /// <summary>
+        /// グローバルボタンブロックを無視するかどうかを設定します。
+        /// true にするとほかのボタン処理中でもこのボタンを押せるようになります。
+        /// </summary>
+        public void SetIgnoreGlobalBlock(bool ignore) => _ignoreGlobalBlock = ignore;
 
         // ---- 長押し API ----
 
         /// <summary>
-        /// 長押しハンドラーをセットします。
+        /// 長押しハンドラーを登録します。
         /// </summary>
         /// <param name="duration">長押しと判定する秒数。</param>
-        /// <param name="onHolding">押している間毎フレーム呼ばれるコールバック。引数は進捗(0.0〜1.0)。離したときに 0 で呼ばれます。</param>
-        /// <param name="onHoldComplete">duration に達したときに一度だけ呼ばれる async ハンドラー。</param>
+        /// <param name="onHolding">押している間、毎フレーム呼ばれるコールバック。引数は進捗(0.0〜1.0)。離したときに 0 で呼ばれます。</param>
+        /// <param name="onHoldComplete">長押し完了時に一度だけ呼ばれる非同期ハンドラー。</param>
         public void SetOnHoldAsync(
             float duration,
             Action<float> onHolding = null,

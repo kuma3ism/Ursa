@@ -3,42 +3,28 @@ using UnityEngine;
 namespace Ursa.UI
 {
     /// <summary>
-    /// Ursa 管理下のボタン全体に適用するグローバルゲート。
+    /// UrsaButton のボタン入力制御を担う内部クラスです。直接操作する必要はありません。
     ///
-    /// ブロックの種類:
-    /// ・グローバルボタンブロック: いずれかのボタンのハンドラー実行中は全ボタンの入力をブロックします。
-    /// ・セルフボタンブロック: 同じボタンの連打を interval 秒間ブロックします（0 なら連打許可）。
+    /// 【セルフボタンブロック】
+    /// 同じボタンの連続押下を interval 秒間防ぎます。interval = 0 なら連打を許可します。
     ///
-    /// static フィールドは float のみ使用するため、ゲーム再起動時の初期化漏れも安全です
-    /// （時間が過ぎれば自動的に解除されるだけ）。
+    /// 【グローバルボタンブロック】
+    /// いずれかのボタンのハンドラーが実行中は、全ボタンの入力を遮断します。
+    /// IgnoreGlobalBlock が有効なボタンはこの制限を受けません。
     /// </summary>
     internal static class UrsaButtonGate
     {
-        /// <summary>グローバルボタンブロック: ハンドラー実行中に TouchRunningBlock で延長し続ける期限。</summary>
         private static float _globalBlockUntil = float.MinValue;
+        private static float _selfBlockUntil   = float.MinValue;
 
-        /// <summary>セルフボタンブロック: 同ボタンの次回押下を許可する時刻。</summary>
-        private static float _selfBlockUntil = float.MinValue;
-
-        /// <summary>グローバルボタンブロックを維持するための延長幅（秒）。</summary>
         private const float GlobalBlockWindow = 0.2f;
 
-        /// <summary>
-        /// ハンドラー実行中に定期的に呼ぶ。
-        /// グローバルボタンブロックの期限を現在時刻基準で延長します。
-        /// 呼び出しが止まれば GlobalBlockWindow 秒後に自動解除されます。
-        /// </summary>
         public static void TouchRunningBlock()
         {
             _globalBlockUntil = Mathf.Max(_globalBlockUntil, Time.unscaledTime + GlobalBlockWindow);
         }
 
-        /// <summary>
-        /// ボタン押下時に呼ぶ。
-        /// グローバルボタンブロック中、またはセルフボタンブロック中の場合は false を返します。
-        /// interval = 0 の場合はセルフボタンブロックは掛かりません。
-        /// </summary>
-        /// <param name="interval">セルフボタンブロックの秒数。</param>
+        /// <param name="interval">セルフボタンブロックの秒数。0 なら連打を許可。</param>
         /// <param name="ignoreGlobalBlock">true の場合、グローバルボタンブロックを無視します。</param>
         public static bool TryEnter(float interval, bool ignoreGlobalBlock = false)
         {
