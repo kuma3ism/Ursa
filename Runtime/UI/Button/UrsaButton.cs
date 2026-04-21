@@ -179,7 +179,6 @@ namespace Ursa.UI
             if (_holdCompleted) return;
             if (!UrsaButtonGate.TryEnter(_gateInterval)) return;
 
-            UrsaButtonGate.EnterRunning();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 _destroyCts.Token,
                 _handlerCts.Token
@@ -199,10 +198,6 @@ namespace Ursa.UI
             catch (Exception ex)
             {
                 Debug.LogException(ex, this);
-            }
-            finally
-            {
-                UrsaButtonGate.ExitRunning();
             }
         }
     }
