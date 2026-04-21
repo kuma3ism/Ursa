@@ -30,7 +30,7 @@ namespace Ursa.UI
     public sealed class UrsaButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         [SerializeField] private Button _button;
-        [SerializeField, Min(0f), Tooltip("このボタンの連打防止インターバル（秒）です。0 なら連打防止なし。")]
+        [SerializeField, Min(0f), Tooltip("このボタン自身の連打防止インターバル（秒）です（セルフボタンブロック）。\n0 なら同ボタンの連打は許可します。\nなおどのボタンのハンドラーが実行中は interval に関わらず全ボタンがブロックされます（グローバルボタンブロック）。")]
         private float _gateInterval = 0.5f;
 
         // ---- クリック ----
@@ -84,7 +84,7 @@ namespace Ursa.UI
 
         // ---- クリック API ----
 
-        /// <summary>このボタンの連打防止インターバル（秒）を設定します。</summary>
+        /// <summary>このボタンの連打防止インターバル（秒）を設定します（セルフボタンブロック）。</summary>
         public void SetGateInterval(float seconds) => _gateInterval = Mathf.Max(0f, seconds);
 
         /// <summary>
