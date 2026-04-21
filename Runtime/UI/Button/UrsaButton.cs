@@ -30,8 +30,12 @@ namespace Ursa.UI
     public sealed class UrsaButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         [SerializeField] private Button _button;
+
         [SerializeField, Min(0f), Tooltip("このボタン自身の連打防止インターバル（秒）です（セルフボタンブロック）。\n0 なら同ボタンの連打は許可します。\nなおどのボタンのハンドラーが実行中は interval に関わらず全ボタンがブロックされます（グローバルボタンブロック）。")]
         private float _gateInterval = 0.5f;
+
+        [SerializeField, Tooltip("グローバルボタンブロックを無視するかどうか。\ntrue にすると他のボタンのハンドラー実行中でもこのボタンは押せるようになります。\nキャンセルボタンや緊急停止ボタンなどに使用してください。")]
+        private bool _ignoreGlobalBlock = false;
 
         // ---- クリック ----
 
@@ -86,6 +90,9 @@ namespace Ursa.UI
 
         /// <summary>このボタンの連打防止インターバル（秒）を設定します（セルフボタンブロック）。</summary>
         public void SetGateInterval(float seconds) => _gateInterval = Mathf.Max(0f, seconds);
+
+        /// <summary>グローバルボタンブロックを無視するかどうかを設定します。</summary>
+        public void SetIgnoreGlobalBlock(bool ignore) => _ignoreGlobalBlock = ignore;
 
         /// <summary>
         /// クリック時に呼ばれる async ハンドラーをセットします。
@@ -177,7 +184,7 @@ namespace Ursa.UI
         private async Task InvokeHandlerAsync()
         {
             if (_holdCompleted) return;
-            if (!UrsaButtonGate.TryEnter(_gateInterval)) return;
+            if (!UrsaButtonGate.TryEnter(_gateInterval, _ignoreGlobalBlock)) return;
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 _destroyCts.Token,

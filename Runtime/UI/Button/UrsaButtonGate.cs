@@ -38,11 +38,13 @@ namespace Ursa.UI
         /// グローバルボタンブロック中、またはセルフボタンブロック中の場合は false を返します。
         /// interval = 0 の場合はセルフボタンブロックは掛かりません。
         /// </summary>
-        public static bool TryEnter(float interval)
+        /// <param name="interval">セルフボタンブロックの秒数。</param>
+        /// <param name="ignoreGlobalBlock">true の場合、グローバルボタンブロックを無視します。</param>
+        public static bool TryEnter(float interval, bool ignoreGlobalBlock = false)
         {
             var now = Time.unscaledTime;
-            if (now < _globalBlockUntil) return false;
-            if (now < _selfBlockUntil)   return false;
+            if (!ignoreGlobalBlock && now < _globalBlockUntil) return false;
+            if (now < _selfBlockUntil) return false;
 
             _selfBlockUntil = now + Mathf.Max(0f, interval);
             return true;
