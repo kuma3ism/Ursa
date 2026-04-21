@@ -204,6 +204,7 @@ namespace Ursa.UI
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
             _isHandlerRunning = true;
+            _globalBlockUntil = now + GlobalBlockBuffer;
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_destroyCts.Token, _handlerCts.Token);
             
