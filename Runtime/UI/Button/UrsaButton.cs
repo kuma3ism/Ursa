@@ -41,6 +41,7 @@ namespace Ursa.UI
 
         private CancellationTokenSource _destroyCts;
         private CancellationTokenSource _handlerCts;
+        private float _selfBlockUntil = float.MinValue;
 
         // ---- 長押し ----
 
@@ -177,8 +178,12 @@ namespace Ursa.UI
 
         private async Task InvokeHandlerAsync()
         {
+            var now = Time.unscaledTime;
             if (_holdCompleted) return;
-            if (!UrsaButtonGate.TryEnter(_gateInterval, _ignoreGlobalBlock)) return;
+            if (now < _selfBlockUntil) return;
+            if (!UrsaButtonGate.TryEnter(_ignoreGlobalBlock)) return;
+
+            _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 _destroyCts.Token,
