@@ -214,11 +214,12 @@ namespace Ursa.UI
             if (!_ignoreGlobalBlock && now < _globalBlockUntil) return;
 
             // IUrsaButtonAction を実装したコンポーネントを全て実行（fire and forget）
-            // SetOnClick とは独立して動作するため、コードで登録したハンドラーと併用可能
+            // 各アクションの例外はログに出力し、後続のアクションおよび _handler に影響させない
             var actions = GetComponents<IUrsaButtonAction>();
             foreach (var action in actions)
             {
-                action.Execute();
+                try { action.Execute(); }
+                catch (Exception ex) { Debug.LogException(ex, this); }
             }
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
