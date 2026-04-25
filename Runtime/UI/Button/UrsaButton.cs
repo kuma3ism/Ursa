@@ -47,6 +47,7 @@ namespace Ursa.UI
         private Action<float> _onHolding;
         private Func<CancellationToken, Task> _onHoldComplete;
         private Coroutine _holdCoroutine;
+        private CancellationTokenSource _holdCompleteCts;
         private bool _holdCompleted;
 
         // ---- 初期化 / 破棄 ----
@@ -55,6 +56,7 @@ namespace Ursa.UI
         {
             _destroyCts = new CancellationTokenSource();
             _handlerCts = new CancellationTokenSource();
+            _holdCompleteCts = new CancellationTokenSource();
             _button ??= GetComponent<Button>();
             _button.onClick.AddListener(InvokeHandler);
         }
@@ -75,6 +77,10 @@ namespace Ursa.UI
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
             _handlerCts = new CancellationTokenSource();
+            
+            _holdCompleteCts?.Cancel();
+            _holdCompleteCts?.Dispose();
+            _holdCompleteCts = new CancellationTokenSource();
 
             ResetHoldState();
         }
@@ -85,6 +91,8 @@ namespace Ursa.UI
             _destroyCts?.Dispose();
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
+            _holdCompleteCts?.Cancel();
+            _holdCompleteCts?.Dispose();
 
             if (_button != null)
                 _button.onClick.RemoveListener(InvokeHandler);
@@ -119,7 +127,7 @@ namespace Ursa.UI
         /// <summary>非同期の長押しハンドラーを登録します。</summary>
         public void SetOnHoldAsync(float duration, Action<float> onHolding = null, Func<CancellationToken, Task> onHoldComplete = null)
         {
-            _holdDuration = duration;
+            _holdDuration = Mathf.Max(0f, duration);
             _onHolding = onHolding;
             _onHoldComplete = onHoldComplete;
         }
@@ -171,7 +179,7 @@ namespace Ursa.UI
             var elapsed = 0f;
             while (elapsed < _holdDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 _onHolding?.Invoke(Mathf.Clamp01(elapsed / _holdDuration));
                 yield return null;
             }
@@ -186,7 +194,10 @@ namespace Ursa.UI
 
         private async Task InvokeHoldCompleteAsync()
         {
-            var token = _destroyCts?.Token ?? CancellationToken.None;
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                _destroyCts?.Token ?? CancellationToken.None,
+                _holdCompleteCts?.Token ?? CancellationToken.None);
+            var token = linkedCts.Token;
             try { await _onHoldComplete(token); }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.LogException(ex, this); }
