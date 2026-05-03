@@ -45,6 +45,8 @@ namespace Ursa
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
         private readonly List<ISceneManagerReceiver> _managerReceiverBuffer = new List<ISceneManagerReceiver>();
+        private readonly List<ISceneReceiver> _sceneReceiverBuffer = new List<ISceneReceiver>();
+        private readonly List<TransitionController> _transitionControllerBuffer = new List<TransitionController>();
 
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
@@ -115,19 +117,35 @@ namespace Ursa
             var topScene = topEntry.Scene;
             if (!topScene.IsValid() || !topScene.isLoaded) return null;
 
-            topScene.GetRootGameObjects(_rootGameObjectBuffer);
-            TransitionController result = null;
-            foreach (var go in _rootGameObjectBuffer)
+            try
             {
-                var controller = go.GetComponentInChildren<TransitionController>();
-                if (controller != null)
+                topScene.GetRootGameObjects(_rootGameObjectBuffer);
+                TransitionController result = null;
+                for (int i = 0; i < _rootGameObjectBuffer.Count; i++)
                 {
-                    result = controller;
-                    break;
+                    var go = _rootGameObjectBuffer[i];
+                    if (go == null) continue;
+
+                    try
+                    {
+                        go.GetComponentsInChildren<TransitionController>(false, _transitionControllerBuffer);
+                        if (_transitionControllerBuffer.Count > 0)
+                        {
+                            result = _transitionControllerBuffer[0];
+                            break;
+                        }
+                    }
+                    finally
+                    {
+                        _transitionControllerBuffer.Clear();
+                    }
                 }
+                return result;
             }
-            _rootGameObjectBuffer.Clear();
-            return result;
+            finally
+            {
+                _rootGameObjectBuffer.Clear();
+            }
         }
 
         /// <summary>
@@ -338,12 +356,36 @@ namespace Ursa
 
         private async Task InjectParameterToScene(Scene targetScene, ISceneParameter parameter)
         {
-            foreach (var go in targetScene.GetRootGameObjects())
+            var receiverList = new List<ISceneReceiver>();
+
+            try
             {
-                foreach (var receiver in go.GetComponentsInChildren<ISceneReceiver>())
+                targetScene.GetRootGameObjects(_rootGameObjectBuffer);
+                for (int i = 0; i < _rootGameObjectBuffer.Count; i++)
                 {
-                    await receiver.OnEnterScene(parameter);
+                    var go = _rootGameObjectBuffer[i];
+                    if (go == null) continue;
+
+                    go.GetComponentsInChildren<ISceneReceiver>(false, _sceneReceiverBuffer);
+                    for (int j = 0; j < _sceneReceiverBuffer.Count; j++)
+                    {
+                        var receiver = _sceneReceiverBuffer[j];
+                        if (receiver != null)
+                        {
+                            receiverList.Add(receiver);
+                        }
+                    }
+                    _sceneReceiverBuffer.Clear();
                 }
+            }
+            finally
+            {
+                _rootGameObjectBuffer.Clear();
+            }
+
+            for (int i = 0; i < receiverList.Count; i++)
+            {
+                await receiverList[i].OnEnterScene(parameter);
             }
         }
 
@@ -353,15 +395,36 @@ namespace Ursa
         /// </summary>
         private void InjectSceneManager(Scene scene)
         {
-            scene.GetRootGameObjects(_rootGameObjectBuffer);
-            foreach (var go in _rootGameObjectBuffer)
+            try
             {
-                go.GetComponentsInChildren<ISceneManagerReceiver>(true, _managerReceiverBuffer);
-                foreach (var receiver in _managerReceiverBuffer)
-                    receiver.SetManager(this);
-                _managerReceiverBuffer.Clear();
+                scene.GetRootGameObjects(_rootGameObjectBuffer);
+                for (int i = 0; i < _rootGameObjectBuffer.Count; i++)
+                {
+                    var go = _rootGameObjectBuffer[i];
+                    if (go == null) continue;
+
+                    try
+                    {
+                        go.GetComponentsInChildren<ISceneManagerReceiver>(true, _managerReceiverBuffer);
+                        for (int j = 0; j < _managerReceiverBuffer.Count; j++)
+                        {
+                            var receiver = _managerReceiverBuffer[j];
+                            if (receiver != null)
+                            {
+                                receiver.SetManager(this);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _managerReceiverBuffer.Clear();
+                    }
+                }
             }
-            _rootGameObjectBuffer.Clear();
+            finally
+            {
+                _rootGameObjectBuffer.Clear();
+            }
         }
 
         private void NotifyBackToScene()
@@ -371,15 +434,36 @@ namespace Ursa
             Scene activeScene = _history[_history.Count - 1].Scene;
             if (activeScene.IsValid() && activeScene.isLoaded)
             {
-                activeScene.GetRootGameObjects(_rootGameObjectBuffer);
-                foreach (var go in _rootGameObjectBuffer)
+                try
                 {
-                    go.GetComponentsInChildren<ISceneBackHandler>(true, _backHandlerBuffer);
-                    foreach (var handler in _backHandlerBuffer)
-                        handler.OnResumeScene();
-                    _backHandlerBuffer.Clear();
+                    activeScene.GetRootGameObjects(_rootGameObjectBuffer);
+                    for (int i = 0; i < _rootGameObjectBuffer.Count; i++)
+                    {
+                        var go = _rootGameObjectBuffer[i];
+                        if (go == null) continue;
+
+                        try
+                        {
+                            go.GetComponentsInChildren<ISceneBackHandler>(true, _backHandlerBuffer);
+                            for (int j = 0; j < _backHandlerBuffer.Count; j++)
+                            {
+                                var handler = _backHandlerBuffer[j];
+                                if (handler != null)
+                                {
+                                    handler.OnResumeScene();
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            _backHandlerBuffer.Clear();
+                        }
+                    }
                 }
-                _rootGameObjectBuffer.Clear();
+                finally
+                {
+                    _rootGameObjectBuffer.Clear();
+                }
             }
         }
 
@@ -390,15 +474,36 @@ namespace Ursa
             Scene topScene = _history[_history.Count - 1].Scene;
             if (topScene.IsValid() && topScene.isLoaded)
             {
-                topScene.GetRootGameObjects(_rootGameObjectBuffer);
-                foreach (var go in _rootGameObjectBuffer)
+                try
                 {
-                    go.GetComponentsInChildren<ISceneBackHandler>(true, _backHandlerBuffer);
-                    foreach (var handler in _backHandlerBuffer)
-                        handler.OnPauseScene();
-                    _backHandlerBuffer.Clear();
+                    topScene.GetRootGameObjects(_rootGameObjectBuffer);
+                    for (int i = 0; i < _rootGameObjectBuffer.Count; i++)
+                    {
+                        var go = _rootGameObjectBuffer[i];
+                        if (go == null) continue;
+
+                        try
+                        {
+                            go.GetComponentsInChildren<ISceneBackHandler>(true, _backHandlerBuffer);
+                            for (int j = 0; j < _backHandlerBuffer.Count; j++)
+                            {
+                                var handler = _backHandlerBuffer[j];
+                                if (handler != null)
+                                {
+                                    handler.OnPauseScene();
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            _backHandlerBuffer.Clear();
+                        }
+                    }
                 }
-                _rootGameObjectBuffer.Clear();
+                finally
+                {
+                    _rootGameObjectBuffer.Clear();
+                }
             }
         }
 
