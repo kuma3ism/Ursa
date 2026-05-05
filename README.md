@@ -10,6 +10,7 @@ Unityの俺俺フレームワーク
   - トランジション：複数の候補から選択可能
   - シーンジェネレーター：シーンを自動作成
 - ダイアログ管理
+- UIボタン管理
 - 音声管理（未実装）
  
 ## UPM インストール
@@ -602,3 +603,170 @@ UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader
 ```
 
 ---
+
+## UrsaButton
+
+`UrsaButton` は Unity の `Button` コンポーネントに連打防止・グローバルブロック・長押しを追加する UI コンポーネントです。  
+`Button` コンポーネントと同じ GameObject に追加して使います。
+
+### セットアップ
+
+Prefab または GameObject に `UrsaButton` コンポーネントを追加するだけで動作します。  
+内部の `UrsaButtonLoop` はシーンロード時に自動生成されます（ヒエラルキーには表示されません）。
+
+### クリックハンドラーの登録
+
+#### 同期処理
+
+```csharp
+_button.SetOnClick(() =>
+{
+    Debug.Log("押された");
+});
+```
+
+#### 非同期処理（CancellationToken あり）
+
+```csharp
+_button.SetOnClickAsync(async ct =>
+{
+    await SomeAsyncTask(ct);
+});
+```
+
+### ゲート設定（連打防止）
+
+#### セルフブロック
+
+同じボタンの連打を防止するインターバルを設定します。デフォルトは `0.5` 秒です。
+
+```csharp
+_button.SetGateInterval(1.0f); // 1秒間は同じボタンを押せない
+_button.SetGateInterval(0f);   // 連打を許可する
+```
+
+Inspector の **Self Block** ヘッダーからも設定できます。
+
+#### グローバルブロック
+
+いずれかのボタンのハンドラーが実行中は、他のボタンも押せなくなります（デフォルト有効）。  
+特定のボタンをブロック対象外にしたい場合は `SetIgnoreGlobalBlock` を使います。
+
+```csharp
+_button.SetIgnoreGlobalBlock(true); // グローバルブロックを無視する
+```
+
+Inspector の **Global Block** ヘッダーからも設定できます。
+
+### キャンセル
+
+#### ボタンを無効化したときの自動キャンセル
+
+`gameObject.SetActive(false)` や `enabled = false` でボタンが無効になると、実行中のハンドラーは自動的にキャンセルされます。
+
+```csharp
+_button.SetOnClickAsync(async ct =>
+{
+    await Task.Delay(5000, ct); // ← ボタン無効化でキャンセルされる
+});
+
+// 別の処理でボタンを無効化
+gameObject.SetActive(false); // 実行中のタスクがキャンセルされる
+```
+
+#### ハンドラー再登録によるキャンセル
+
+`SetOnClickAsync` を再度呼ぶと、実行中のハンドラーがキャンセルされます。
+
+```csharp
+// 最初のハンドラーを登録
+_button.SetOnClickAsync(async ct =>
+{
+    await Task.Delay(10000, ct);
+    Debug.Log("完了");
+});
+
+// 再登録すると実行中のタスクがキャンセルされる
+_button.SetOnClickAsync(async ct =>
+{
+    Debug.Log("新しいハンドラー");
+    await Task.CompletedTask;
+});
+```
+
+#### CancellationToken を使った明示的なキャンセル
+
+```csharp
+private CancellationTokenSource _cts;
+
+private void Start()
+{
+    _cts = new CancellationTokenSource();
+
+    _button.SetOnClickAsync(async ct =>
+    {
+        // ボタンの ct と外部の _cts.Token を組み合わせる
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+        await SomeAsyncTask(linked.Token);
+    });
+}
+
+// 任意のタイミングでキャンセル
+public void CancelTask()
+{
+    _cts.Cancel();
+    _cts.Dispose();
+    _cts = new CancellationTokenSource();
+}
+
+private void OnDestroy()
+{
+    _cts?.Cancel();
+    _cts?.Dispose();
+}
+```
+
+### 長押し
+
+長押し完了までの進行度（0〜1）を受け取りながら、完了時に処理を実行できます。
+
+#### 同期
+
+```csharp
+_button.SetOnHold(
+    duration: 2.0f,                              // 長押し判定までの秒数
+    onHolding: progress =>
+    {
+        _gauge.fillAmount = progress;            // 0〜1 で進行度を受け取る
+    },
+    onHoldComplete: () =>
+    {
+        Debug.Log("長押し完了");
+    }
+);
+```
+
+#### 非同期（CancellationToken あり）
+
+```csharp
+_button.SetOnHoldAsync(
+    duration: 2.0f,
+    onHolding: progress =>
+    {
+        _gauge.fillAmount = progress;
+    },
+    onHoldComplete: async ct =>
+    {
+        await DeleteDataAsync(ct);
+    }
+);
+```
+
+> **Note:** 長押し完了後にボタンを離しても通常のクリックハンドラーは発火しません。
+
+### Inspector 設定一覧
+
+| 項目 | デフォルト | 説明 |
+|---|---|---|
+| Gate Interval | `0.5` | セルフブロックのインターバル（秒）。0 で無効 |
+| Ignore Global Block | `false` | true にするとグローバルブロックを無視する |
