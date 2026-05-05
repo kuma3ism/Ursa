@@ -23,15 +23,23 @@ namespace Ursa.UI
         [SerializeField, Tooltip("グローバルボタンブロックを無視するかどうか。\ntrue にすると他のボタンのハンドラー実行中でもこのボタンは押せるようになります。")]
         private bool _ignoreGlobalBlock = false;
 
-        // ---- 全ボタン共通の管理（static） ----
+        // ---- 全ボタン共通の管理（UrsaButtonLoop） ----
 
-        private static float _globalBlockUntil = float.MinValue;
-        
+        private static UrsaButtonLoop _loop;
+
         /// <summary>
         /// 実行停止からブロック解除までの猶予時間（バッファ）。
-        /// 実行中はこの時間分だけ常にロックを延長し、停止から 0.2 秒後に自動解除されます。
         /// </summary>
-        private const float GlobalBlockBuffer = 0.2f;
+        internal const float GlobalBlockBuffer = 0.2f;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void InitializeLoop()
+        {
+            var go = new GameObject("[UrsaButtonLoop]");
+            go.hideFlags = HideFlags.HideInHierarchy;
+            _loop = go.AddComponent<UrsaButtonLoop>();
+            // Awake で SetActive(false) されるので、ここでは何もしない
+        }
 
         // ---- 個別の状態管理 ----
 
@@ -47,7 +55,6 @@ namespace Ursa.UI
         private Action<float> _onHolding;
         private Func<CancellationToken, Task> _onHoldComplete;
         private Coroutine _holdCoroutine;
-        private CancellationTokenSource _holdCompleteCts;
         private bool _holdCompleted;
 
         // ---- 初期化 / 破棄 ----
@@ -56,31 +63,22 @@ namespace Ursa.UI
         {
             _destroyCts = new CancellationTokenSource();
             _handlerCts = new CancellationTokenSource();
-            _holdCompleteCts = new CancellationTokenSource();
             _button ??= GetComponent<Button>();
             _button.onClick.AddListener(InvokeHandler);
         }
 
-        private void Update()
-        {
-            // 自分が実行中なら、共通のブロック時間を延長し続ける
-            if (_isHandlerRunning)
-            {
-                _globalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
-            }
-        }
-
         private void OnDisable()
         {
+            if (_isHandlerRunning)
+            {
+                _loop.gameObject.SetActive(false);
+                _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
+            }
             _isHandlerRunning = false;
-            
+
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
             _handlerCts = new CancellationTokenSource();
-            
-            _holdCompleteCts?.Cancel();
-            _holdCompleteCts?.Dispose();
-            _holdCompleteCts = new CancellationTokenSource();
 
             ResetHoldState();
         }
@@ -91,8 +89,6 @@ namespace Ursa.UI
             _destroyCts?.Dispose();
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
-            _holdCompleteCts?.Cancel();
-            _holdCompleteCts?.Dispose();
 
             if (_button != null)
                 _button.onClick.RemoveListener(InvokeHandler);
@@ -127,7 +123,7 @@ namespace Ursa.UI
         /// <summary>非同期の長押しハンドラーを登録します。</summary>
         public void SetOnHoldAsync(float duration, Action<float> onHolding = null, Func<CancellationToken, Task> onHoldComplete = null)
         {
-            _holdDuration = Mathf.Max(0f, duration);
+            _holdDuration = duration;
             _onHolding = onHolding;
             _onHoldComplete = onHoldComplete;
         }
@@ -171,7 +167,7 @@ namespace Ursa.UI
                 StopCoroutine(_holdCoroutine);
                 _holdCoroutine = null;
             }
-            _onHolding?.Invoke(0f);
+            if (!_holdCompleted) _onHolding?.Invoke(0f);
         }
 
         private System.Collections.IEnumerator HoldCoroutine()
@@ -179,7 +175,7 @@ namespace Ursa.UI
             var elapsed = 0f;
             while (elapsed < _holdDuration)
             {
-                elapsed += Time.unscaledDeltaTime;
+                elapsed += Time.deltaTime;
                 _onHolding?.Invoke(Mathf.Clamp01(elapsed / _holdDuration));
                 yield return null;
             }
@@ -194,10 +190,7 @@ namespace Ursa.UI
 
         private async Task InvokeHoldCompleteAsync()
         {
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                _destroyCts?.Token ?? CancellationToken.None,
-                _holdCompleteCts?.Token ?? CancellationToken.None);
-            var token = linkedCts.Token;
+            var token = _destroyCts?.Token ?? CancellationToken.None;
             try { await _onHoldComplete(token); }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.LogException(ex, this); }
@@ -208,30 +201,25 @@ namespace Ursa.UI
         private async Task InvokeHandlerAsync()
         {
             var now = Time.unscaledTime;
-            
+
             if (_holdCompleted) return;
             if (now < _selfBlockUntil) return;
-            if (!_ignoreGlobalBlock && now < _globalBlockUntil) return;
-
-            // IUrsaButtonAction を実装したコンポーネントを全て実行（fire and forget）
-            // 各アクションの例外はログに出力し、後続のアクションおよび _handler に影響させない
-            var actions = GetComponents<IUrsaButtonAction>();
-            foreach (var action in actions)
-            {
-                try { action.Execute(); }
-                catch (Exception ex) { Debug.LogException(ex, this); }
-            }
+            if (!_ignoreGlobalBlock && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
-            _isHandlerRunning = true;
-            _globalBlockUntil = now + GlobalBlockBuffer;
+            _loop.gameObject.SetActive(true); // Update を起動
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_destroyCts.Token, _handlerCts.Token);
-            
+
             try { await _handler(linkedCts.Token); }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.LogException(ex, this); }
-            finally { _isHandlerRunning = false; }
+            finally
+            {
+                _isHandlerRunning = false;
+                _loop.gameObject.SetActive(false); // Update を止める
+                _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
+            }
         }
     }
 }
