@@ -38,6 +38,7 @@ namespace Ursa.UI
             var go = new GameObject("[UrsaButtonLoop]");
             go.hideFlags = HideFlags.HideInHierarchy;
             _loop = go.AddComponent<UrsaButtonLoop>();
+            // Awake で SetActive(false) されるので、ここでは何もしない
         }
 
         // ---- 個別の状態管理 ----
@@ -70,7 +71,7 @@ namespace Ursa.UI
         {
             if (_isHandlerRunning)
             {
-                _loop.IsRunning = false;
+                _loop.gameObject.SetActive(false);
                 _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
             }
             _isHandlerRunning = false;
@@ -203,11 +204,10 @@ namespace Ursa.UI
 
             if (_holdCompleted) return;
             if (now < _selfBlockUntil) return;
-            if (!_ignoreGlobalBlock && (_loop.IsRunning || now < _loop.GlobalBlockUntil)) return;
+            if (!_ignoreGlobalBlock && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
-            _isHandlerRunning = true;
-            _loop.IsRunning = true;
+            _loop.gameObject.SetActive(true); // Update を起動
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_destroyCts.Token, _handlerCts.Token);
 
@@ -217,7 +217,7 @@ namespace Ursa.UI
             finally
             {
                 _isHandlerRunning = false;
-                _loop.IsRunning = false;
+                _loop.gameObject.SetActive(false); // Update を止める
                 _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
             }
         }
