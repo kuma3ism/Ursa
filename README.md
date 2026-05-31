@@ -770,3 +770,9 @@ _button.SetOnHoldAsync(
 |---|---|---|
 | Gate Interval | `0.5` | セルフブロックのインターバル（秒）。0 で無効 |
 | Ignore Global Block | `false` | true にするとグローバルブロックを無視する |
+
+## License
+
+MIT
+
+Copyright (c) 2026 kuma3ism
