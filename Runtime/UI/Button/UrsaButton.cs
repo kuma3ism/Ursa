@@ -45,6 +45,7 @@ namespace Ursa.UI
         // ---- 個別の状態管理 ----
 
         private Func<CancellationToken, Task> _handler = _ => Task.CompletedTask;
+        private IUrsaButtonAction[] _buttonActions; // ★ SetOnClick と独立して管理
         private CancellationTokenSource _handlerCts;
         private CancellationTokenSource _destroyCts;
         private float _selfBlockUntil = float.MinValue;
@@ -68,18 +69,8 @@ namespace Ursa.UI
             _button ??= GetComponent<Button>();
             _button.onClick.AddListener(InvokeHandler);
 
-            // ★ IUrsaButtonAction の自動バインド処理を追加
-            var actions = GetComponents<IUrsaButtonAction>();
-            if (actions != null && actions.Length > 0)
-            {
-                SetOnClick(() =>
-                {
-                    foreach (var action in actions)
-                    {
-                        action?.Execute();
-                    }
-                });
-            }
+            // ★ IUrsaButtonAction をキャッシュ（SetOnClick とは独立して InvokeHandlerAsync 内で実行される）
+            _buttonActions = GetComponents<IUrsaButtonAction>();
         }
 
         private void OnDisable()
@@ -226,7 +217,7 @@ namespace Ursa.UI
             // 長押し完了もボタン実行の一種とみなし、連打ブロックを適用する
             var now = Time.unscaledTime;
             if (now < _selfBlockUntil) return;
-            if (!_ignoreGlobalBlock && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
+            if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return; // ★ _loop null チェック追加
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
             _isHandlerRunning = true;
@@ -272,11 +263,21 @@ namespace Ursa.UI
             _loop.gameObject.SetActive(true); // Update を起動
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                _destroyCts?.Token ?? CancellationToken.None, 
+                _destroyCts?.Token ?? CancellationToken.None,
                 _handlerCts?.Token ?? CancellationToken.None
             );
 
-            try { await _handler(linkedCts.Token); }
+            try
+            {
+                // ★ IUrsaButtonAction は SetOnClick より先にクリック時即実行（両方確実に呼ばれる）
+                if (_buttonActions != null)
+                {
+                    foreach (var action in _buttonActions)
+                        action?.Execute();
+                }
+
+                await _handler(linkedCts.Token);
+            }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.LogException(ex, this); }
             finally
