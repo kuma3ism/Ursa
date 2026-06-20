@@ -32,14 +32,37 @@ namespace Ursa.UI
         /// </summary>
         internal const float GlobalBlockBuffer = 0.2f;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        // ドメインリロード無効時に静的フィールドが残るため、再生前に必ずリセットする
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatic()
+        {
+            _loop = null;
+        }
+
+        /// <summary>
+        /// グローバルボタンブロック管理オブジェクトを生成する（遅延生成）。
+        /// シーンに紐づけて生成するため、DontDestroyOnLoad は使用しない。
+        /// シーン遷移で破棄された場合は次の UrsaButton.Awake 時に再生成される。
+        /// </summary>
         private static void InitializeLoop()
         {
+            // 既に生成済みなら何もしない（二重生成防止）
+            if (_loop != null) return;
+
             var go = new GameObject("[UrsaButtonLoop]");
             go.hideFlags = HideFlags.HideInHierarchy;
-            UnityEngine.Object.DontDestroyOnLoad(go); // ★ シーン遷移で破棄されないようにDontDestroyOnLoadを追加
+            // DontDestroyOnLoad は使用しない。シーン遷移で破棄される前提。
             _loop = go.AddComponent<UrsaButtonLoop>();
             // Awake で SetActive(false) されるので、ここでは何もしない
+        }
+
+        /// <summary>
+        /// 必要に応じてループを遅延生成する（_loop が null なら生成）。
+        /// 各 UrsaButton の Awake 時に呼ばれる。
+        /// </summary>
+        private static void EnsureLoop()
+        {
+            if (_loop == null) InitializeLoop();
         }
 
         // ---- 個別の状態管理 ----
@@ -71,6 +94,9 @@ namespace Ursa.UI
 
             // ★ IUrsaButtonAction をキャッシュ（SetOnClick とは独立して InvokeHandlerAsync 内で実行される）
             _buttonActions = GetComponents<IUrsaButtonAction>();
+
+            // グローバルループを遅延生成（最初の UrsaButton.Awake で生成される）
+            EnsureLoop();
         }
 
         private void OnDisable()
@@ -85,6 +111,10 @@ namespace Ursa.UI
             }
             _isHandlerRunning = false;
 
+            // _handlerCts を再生成する設計:
+            // 実行中のハンドラーは _destroyCts とリンクしているため、
+            // コンポーネント破棄時（OnDestroy）には _destroyCts.Cancel() で確実に止まる。
+            // ここでは SetOnClick 等で次回登録されるハンドラー用の新しいトークンを用意する。
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
             _handlerCts = new CancellationTokenSource();
@@ -196,10 +226,12 @@ namespace Ursa.UI
 
         private System.Collections.IEnumerator HoldCoroutine()
         {
+            // Time.unscaledTime（グローバルブロック）と評価基準を合わせるため unscaledDeltaTime を使用
+            // Time.timeScale = 0（ポーズ中）でも長押し判定が固まらない
             var elapsed = 0f;
             while (elapsed < _holdDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 _onHolding?.Invoke(Mathf.Clamp01(elapsed / _holdDuration));
                 yield return null;
             }
@@ -256,7 +288,9 @@ namespace Ursa.UI
 
             if (_holdCompleted) return;
             if (now < _selfBlockUntil) return;
-            if (!_ignoreGlobalBlock && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
+            // _loop は DontDestroyOnLoad しないため、シーン遷移直後は fake null になる可能性がある
+            if (_loop == null) EnsureLoop();
+            if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
             _isHandlerRunning = true; // ★ 実行中フラグのセット漏れを修正
