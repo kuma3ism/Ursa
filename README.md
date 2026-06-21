@@ -21,7 +21,12 @@ https://github.com/kuma3ism/Ursa.git
 
 ## セットアップ
 
-ゲーム起動時に `UrsaCore.Initialize()` を呼んで初期化します。
+Ursa では以下の 2 つの方法から選択して初期化できます。
+混在させると混乱を招くため、プロジェクトで統一した運用を推奨します。
+
+### A. UrsaCore のサービスロケーターを使う
+
+ゲーム起動時に `UrsaCore.Initialize()` を呼んで、各管理システムを静的サービスロケーターに登録します。
 `RuntimeInitializeOnLoadMethod` を使うと MonoBehaviour 不要で自動実行できます。
 
 ```csharp
@@ -36,18 +41,54 @@ public static class UrsaInitializer
 }
 ```
 
-> **補足：サービスロケーターとして動作します**
-> `UrsaCore` は静的なサービスロケーターです。シーン・ダイアログ の各管理システムを
-> それぞれの `Initialize()` オーバーロードで登録し、
-> 以降はどこからでも `UrsaCore.Scene` / `UrsaCore.Dialog` 経由でアクセスできます。
-> 登録されていない領域にアクセスすると `InvalidOperationException` がスローされます。
->
+以降は `UrsaCore.Scene` / `UrsaCore.Dialog` 経由でアクセスできます。
+登録されていない領域にアクセスすると `InvalidOperationException` がスローされます。
+
+```csharp
+await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter());
+```
+
 > **補足：UI 管理システムについて**
 > `UrsaCore.UI` と `UrsaUIManager` は将来の拡張用に用意されていますが、
 > 現状の Ursa 内部機能（シーン遷移・ダイアログ・UrsaButton）では使用していません。
 > そのため、通常の利用では `UrsaCore.Initialize(new UrsaUIManager())` は不要です。
 > 独自の UI 実行ロックやブロッカーを実装して差し込みたい場合に利用してください。
 
+### B. DIコンテナからインターフェースを受け取る
+
+既に DIコンテナ（例：VContainer、Zenject）を導入済みの場合は、
+`ISceneManager` / `IDialogManager` の実装をコンテナに登録し、必要なクラスに注入して使います。
+
+```csharp
+// VContainer の例
+public class UrsaLifetimeScope : LifetimeScope
+{
+    protected override void Configure(IContainerBuilder builder)
+    {
+        builder.RegisterInstance<ISceneManager>(new UrsaSceneManager());
+        builder.RegisterInstance<IDialogManager>(new UrsaDialogManager());
+    }
+}
+```
+
+注入先の例：
+
+```csharp
+public class SomePresenter
+{
+    private readonly ISceneManager _sceneManager;
+
+    public SomePresenter(ISceneManager sceneManager)
+    {
+        _sceneManager = sceneManager;
+    }
+}
+```
+
+| 選び方 | おすすめのケース |
+|--------|----------------|
+| A. UrsaCore を使う | 小規模なプロジェクト、DI導入を検討していない |
+| B. DI を使う | 既にDIコンテナを導入済み、テストや差し替えを重視する |
 
 
 ---
