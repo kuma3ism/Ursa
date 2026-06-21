@@ -215,7 +215,12 @@ namespace Ursa.UI
             _isHoldingActive = false;
 
             if (_onHolding == null && _onHoldComplete == null) return;
-            _isHoldingActive = true; // 長押しアクションが存在する場合にフラグを立てる
+
+            // グローバルブロック中は長押しを開始しない（他のボタン実行中は触っていないものとする）
+            var now = Time.unscaledTime;
+            if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
+
+            _isHoldingActive = true;
             if (_holdCoroutine != null) StopCoroutine(_holdCoroutine);
             _holdCoroutine = StartCoroutine(HoldCoroutine());
         }
@@ -258,15 +263,23 @@ namespace Ursa.UI
             while (elapsed < _holdDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                _onHolding?.Invoke(Mathf.Clamp01(elapsed / _holdDuration));
+                var progress = Mathf.Clamp01(elapsed / _holdDuration);
+                _onHolding?.Invoke(progress);
+
+                // 1.0 に到達したら長押し成立としてループを抜ける
+                // これで onHolding に 1.0 は1回だけ通知される
+                if (progress >= 1f)
+                {
+                    _holdCompleted = true;
+                    break;
+                }
+
                 yield return null;
             }
 
-            _holdCompleted = true;
-            _onHolding?.Invoke(1f);
             _holdCoroutine = null;
 
-            if (_onHoldComplete != null)
+            if (_holdCompleted && _onHoldComplete != null)
                 _ = InvokeHoldCompleteAsync();
         }
 
