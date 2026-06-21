@@ -32,16 +32,21 @@ public static class UrsaInitializer
     {
         UrsaCore.Initialize(new UrsaSceneManager());
         UrsaCore.Initialize(new UrsaDialogManager());
-        UrsaCore.Initialize(new UrsaUIManager());
     }
 }
 ```
 
 > **補足：サービスロケーターとして動作します**
-> `UrsaCore` は静的なサービスロケーターです。シーン・ダイアログ・UI の各管理システムを
+> `UrsaCore` は静的なサービスロケーターです。シーン・ダイアログ の各管理システムを
 > それぞれの `Initialize()` オーバーロードで登録し、
-> 以降はどこからでも `UrsaCore.Scene` / `UrsaCore.Dialog` / `UrsaCore.UI` 経由でアクセスできます。
+> 以降はどこからでも `UrsaCore.Scene` / `UrsaCore.Dialog` 経由でアクセスできます。
 > 登録されていない領域にアクセスすると `InvalidOperationException` がスローされます。
+>
+> **補足：UI 管理システムについて**
+> `UrsaCore.UI` と `UrsaUIManager` は将来の拡張用に用意されていますが、
+> 現状の Ursa 内部機能（シーン遷移・ダイアログ・UrsaButton）では使用していません。
+> そのため、通常の利用では `UrsaCore.Initialize(new UrsaUIManager())` は不要です。
+> 独自の UI 実行ロックやブロッカーを実装して差し込みたい場合に利用してください。
 
 
 
