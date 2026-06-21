@@ -614,6 +614,21 @@ UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader
 Prefab または GameObject に `UrsaButton` コンポーネントを追加するだけで動作します。  
 内部の `UrsaButtonLoop` はシーンロード時に自動生成されます（ヒエラルキーには表示されません）。
 
+### インターフェース（IUrsaButton）
+
+Presenter や UseCase から操作する場合は `IUrsaButton` インターフェース経由での参照を推奨します。
+
+```csharp
+[SerializeField] private UrsaButton _button;
+
+private IUrsaButton Button => _button;
+
+private void Start()
+{
+    Button.SetOnClick(OnButtonClicked);
+}
+```
+
 ### クリックハンドラーの登録
 
 #### 同期処理
@@ -628,11 +643,45 @@ _button.SetOnClick(() =>
 #### 非同期処理（CancellationToken あり）
 
 ```csharp
-_button.SetOnClickAsync(async ct =>
+_button.SetOnClick(async ct =>
 {
     await SomeAsyncTask(ct);
 });
 ```
+
+#### 外部 CancellationTokenSource とのリンク
+
+外部 CTS が再生成されるケース（ループ処理など）では、`externalCtsProvider` オーバーロードを使うと  
+UrsaButton 内部のトークンと安全にリンクできます。
+
+```csharp
+_button.SetOnClick(
+    externalCtsProvider: () => _externalCts,
+    handler: async ct =>
+    {
+        // UrsaButton の CT と外部 CT のどちらかがキャンセルされると止まる
+        await SomeAsyncTask(ct);
+    }
+);
+```
+
+### IUrsaButtonAction
+
+`IUrsaButtonAction` を実装したコンポーネントを同じ GameObject にアタッチすると、  
+`SetOnClick` とは独立してクリック時に `Execute()` が呼ばれます。コードを書かずにボタンへ挙動を付与したい場合に使います。
+
+```csharp
+public class MyButtonEffect : MonoBehaviour, IUrsaButtonAction
+{
+    public void Execute()
+    {
+        // SE 再生や演出など
+    }
+}
+```
+
+> **Note:** `IUrsaButtonAction.Execute()` は `SetOnClick` ハンドラーより先に呼ばれます。  
+> グローバルブロック・セルフブロックは両方に同様に適用されます。
 
 ### ゲート設定（連打防止）
 
@@ -665,7 +714,7 @@ Inspector の **Global Block** ヘッダーからも設定できます。
 `gameObject.SetActive(false)` や `enabled = false` でボタンが無効になると、実行中のハンドラーは自動的にキャンセルされます。
 
 ```csharp
-_button.SetOnClickAsync(async ct =>
+_button.SetOnClick(async ct =>
 {
     await Task.Delay(5000, ct); // ← ボタン無効化でキャンセルされる
 });
@@ -676,18 +725,18 @@ gameObject.SetActive(false); // 実行中のタスクがキャンセルされる
 
 #### ハンドラー再登録によるキャンセル
 
-`SetOnClickAsync` を再度呼ぶと、実行中のハンドラーがキャンセルされます。
+`SetOnClick` を再度呼ぶと、実行中のハンドラーがキャンセルされます。
 
 ```csharp
 // 最初のハンドラーを登録
-_button.SetOnClickAsync(async ct =>
+_button.SetOnClick(async ct =>
 {
     await Task.Delay(10000, ct);
     Debug.Log("完了");
 });
 
 // 再登録すると実行中のタスクがキャンセルされる
-_button.SetOnClickAsync(async ct =>
+_button.SetOnClick(async ct =>
 {
     Debug.Log("新しいハンドラー");
     await Task.CompletedTask;
@@ -703,9 +752,8 @@ private void Start()
 {
     _cts = new CancellationTokenSource();
 
-    _button.SetOnClickAsync(async ct =>
+    _button.SetOnClick(async ct =>
     {
-        // ボタンの ct と外部の _cts.Token を組み合わせる
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
         await SomeAsyncTask(linked.Token);
     });
@@ -726,6 +774,8 @@ private void OnDestroy()
 }
 ```
 
+> **Note:** 外部 CTS を毎回使い回すケースでは、`externalCtsProvider` オーバーロードの使用も検討してください。
+
 ### 長押し
 
 長押し完了までの進行度（0〜1）を受け取りながら、完了時に処理を実行できます。
@@ -733,7 +783,7 @@ private void OnDestroy()
 #### 同期
 
 ```csharp
-_button.SetOnHold(
+_button.SetOnLongClick(
     duration: 2.0f,                              // 長押し判定までの秒数
     onHolding: progress =>
     {
@@ -749,7 +799,7 @@ _button.SetOnHold(
 #### 非同期（CancellationToken あり）
 
 ```csharp
-_button.SetOnHoldAsync(
+_button.SetOnLongClickAsync(
     duration: 2.0f,
     onHolding: progress =>
     {
@@ -762,7 +812,7 @@ _button.SetOnHoldAsync(
 );
 ```
 
-> **Note:** 長押し完了後にボタンを離しても通常のクリックハンドラーは発火しません。
+> **Note:** 長押し成立後にボタンを離しても通常のクリックハンドラーは発火しません。
 
 ### Inspector 設定一覧
 
