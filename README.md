@@ -73,13 +73,17 @@ public static class UrsaInitializer
     private static void Initialize()
     {
         UrsaCore.Initialize(new UrsaSceneManager());
+        UrsaCore.Initialize(new UrsaDialogManager());
+        UrsaCore.Initialize(new UrsaUIManager());
     }
 }
 ```
 
 > **補足：サービスロケーターとして動作します**
-> `UrsaCore` は静的なサービスロケーターです。`Initialize()` で `ISceneManager` の実装を登録し、
-> 以降はどこからでも `UrsaCore.Scene` 経由でアクセスできます。
+> `UrsaCore` は静的なサービスロケーターです。シーン・ダイアログ・UI の各管理システムを
+> それぞれの `Initialize()` オーバーロードで登録し、
+> 以降はどこからでも `UrsaCore.Scene` / `UrsaCore.Dialog` / `UrsaCore.UI` 経由でアクセスできます。
+> 登録されていない領域にアクセスすると `InvalidOperationException` がスローされます。
 
 
 ## シーンの作り方
