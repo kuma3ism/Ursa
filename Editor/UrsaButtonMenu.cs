@@ -129,7 +129,7 @@ namespace Ursa.Editor
             }
 
             // シーン内に既存の Canvas があればその下に入れる
-            var sceneCanvases = UnityEngine.Object.FindObjectsOfType<Canvas>();
+            var sceneCanvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
             if (sceneCanvases.Length > 0)
             {
                 return sceneCanvases[0].transform;

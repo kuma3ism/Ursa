@@ -9,7 +9,7 @@ namespace Ursa.UI
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Button))]
-    public sealed class UrsaButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+    public sealed class UrsaButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler, IUrsaButton
     {
         [SerializeField] private Button _button;
 
@@ -145,7 +145,7 @@ namespace Ursa.UI
         // ---- クリック API ----
 
         /// <summary>非同期ハンドラーを登録します。</summary>
-        public void SetOnClickAsync(Func<CancellationToken, Task> handler)
+        public void SetOnClick(Func<CancellationToken, Task> handler)
         {
             _handlerCts?.Cancel();
             _handlerCts?.Dispose();
@@ -153,10 +153,31 @@ namespace Ursa.UI
             _handler = handler ?? (_ => Task.CompletedTask);
         }
 
+        /// <summary>
+        /// 実行時に外部の CancellationTokenSource を取得し、UrsaButton 内部の CancellationToken とリンクさせます。
+        /// 外部 CTS が再生成される場合に利用します。
+        /// </summary>
+        /// <param name="externalCtsProvider">実行時に外部 CancellationTokenSource を返すファクトリ。</param>
+        /// <param name="handler">リンクされた CancellationToken を受け取る非同期ハンドラー。</param>
+        public void SetOnClick(Func<CancellationTokenSource> externalCtsProvider, Func<CancellationToken, Task> handler)
+        {
+            if (externalCtsProvider == null) throw new ArgumentNullException(nameof(externalCtsProvider));
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+            SetOnClick(async ursaCt =>
+            {
+                var externalCts = externalCtsProvider();
+                if (externalCts == null) throw new InvalidOperationException("外部 CancellationTokenSource が null です。");
+
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ursaCt, externalCts.Token);
+                await handler(linkedCts.Token);
+            });
+        }
+
         /// <summary>同期処理（Action）を登録します（内部で非同期として扱われます）。</summary>
         public void SetOnClick(Action handler)
         {
-            SetOnClickAsync(_ =>
+            SetOnClick(_ =>
             {
                 handler?.Invoke();
                 return Task.CompletedTask;
@@ -168,18 +189,18 @@ namespace Ursa.UI
 
         // ---- 長押し API ----
 
-        /// <summary>非同期の長押しハンドラーを登録します。</summary>
-        public void SetOnHoldAsync(float duration, Action<float> onHolding = null, Func<CancellationToken, Task> onHoldComplete = null)
+        /// <summary>非同期の長押し（ロングクリック）ハンドラーを登録します。</summary>
+        public void SetOnLongClickAsync(float duration, Action<float> onHolding = null, Func<CancellationToken, Task> onHoldComplete = null)
         {
             _holdDuration = duration;
             _onHolding = onHolding;
             _onHoldComplete = onHoldComplete;
         }
 
-        /// <summary>同期の長押しハンドラーを登録します。</summary>
-        public void SetOnHold(float duration, Action<float> onHolding = null, Action onHoldComplete = null)
+        /// <summary>同期の長押し（ロングクリック）ハンドラーを登録します。</summary>
+        public void SetOnLongClick(float duration, Action<float> onHolding = null, Action onHoldComplete = null)
         {
-            SetOnHoldAsync(duration, onHolding, _ =>
+            SetOnLongClickAsync(duration, onHolding, _ =>
             {
                 onHoldComplete?.Invoke();
                 return Task.CompletedTask;
@@ -201,6 +222,11 @@ namespace Ursa.UI
 
         void IPointerUpHandler.OnPointerUp(PointerEventData eventData)
         {
+            // 長押し判定が開始されていて、まだ成立していなければ通常クリックを発火する
+            if (_isHoldingActive && !_holdCompleted)
+            {
+                _ = InvokeHandlerAsync();
+            }
             ResetHoldState();
         }
 
@@ -272,12 +298,9 @@ namespace Ursa.UI
 
         private void InvokeHandler()
         {
-            // ★ 長押しをしようとして途中で指を離した場合、クリックは無視する
-            if (_isHoldingActive)
-            {
-                _isHoldingActive = false;
-                return;
-            }
+            // 長押しが登録されている場合、OnPointerUp で通常クリック判定を行うため、
+            // ここでは長押し判定中または長押し成立済みの場合は無視する。
+            if (_isHoldingActive || _holdCompleted) return;
 
             _ = InvokeHandlerAsync();
         }
@@ -286,14 +309,13 @@ namespace Ursa.UI
         {
             var now = Time.unscaledTime;
 
-            if (_holdCompleted) return;
             if (now < _selfBlockUntil) return;
             // _loop は DontDestroyOnLoad しないため、シーン遷移直後は fake null になる可能性がある
             if (_loop == null) EnsureLoop();
             if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
-            _isHandlerRunning = true; // ★ 実行中フラグのセット漏れを修正
+            _isHandlerRunning = true;
             _loop.gameObject.SetActive(true); // Update を起動
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
