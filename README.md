@@ -93,7 +93,7 @@ public class SomePresenter
 
 ---
 
-## エディターメニュー（シーンテンプレート自動生成）
+## メニュからシーンを作成
 
 `Ursa/Create Scene...` または Project ビュー右クリック → `Assets/Create/Ursa/Create Scene...`
 
@@ -133,7 +133,7 @@ Namespace  : Game
 
 ---
 
-## シーンの作り方
+## シーン使い方
 
 ### 1. パラメーターの定義
 
