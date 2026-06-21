@@ -19,6 +19,32 @@ Unityの俺俺フレームワーク（まだいろいろ作成中）
 https://github.com/kuma3ism/Ursa.git
 ```
 
+## セットアップ
+
+ゲーム起動時に `UrsaCore.Initialize()` を呼んで初期化します。
+`RuntimeInitializeOnLoadMethod` を使うと MonoBehaviour 不要で自動実行できます。
+
+```csharp
+public static class UrsaInitializer
+{
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Initialize()
+    {
+        UrsaCore.Initialize(new UrsaSceneManager());
+        UrsaCore.Initialize(new UrsaDialogManager());
+        UrsaCore.Initialize(new UrsaUIManager());
+    }
+}
+```
+
+> **補足：サービスロケーターとして動作します**
+> `UrsaCore` は静的なサービスロケーターです。シーン・ダイアログ・UI の各管理システムを
+> それぞれの `Initialize()` オーバーロードで登録し、
+> 以降はどこからでも `UrsaCore.Scene` / `UrsaCore.Dialog` / `UrsaCore.UI` 経由でアクセスできます。
+> 登録されていない領域にアクセスすると `InvalidOperationException` がスローされます。
+
+
+
 ---
 
 ## エディターメニュー（シーンテンプレート自動生成）
@@ -60,31 +86,6 @@ Namespace  : Game
 > **Note:** スクリプトのアタッチはコンパイル完了後に自動実行されます。
 
 ---
-
-## セットアップ
-
-ゲーム起動時に `UrsaCore.Initialize()` を呼んで初期化します。
-`RuntimeInitializeOnLoadMethod` を使うと MonoBehaviour 不要で自動実行できます。
-
-```csharp
-public static class UrsaInitializer
-{
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    private static void Initialize()
-    {
-        UrsaCore.Initialize(new UrsaSceneManager());
-        UrsaCore.Initialize(new UrsaDialogManager());
-        UrsaCore.Initialize(new UrsaUIManager());
-    }
-}
-```
-
-> **補足：サービスロケーターとして動作します**
-> `UrsaCore` は静的なサービスロケーターです。シーン・ダイアログ・UI の各管理システムを
-> それぞれの `Initialize()` オーバーロードで登録し、
-> 以降はどこからでも `UrsaCore.Scene` / `UrsaCore.Dialog` / `UrsaCore.UI` 経由でアクセスできます。
-> 登録されていない領域にアクセスすると `InvalidOperationException` がスローされます。
-
 
 ## シーンの作り方
 
