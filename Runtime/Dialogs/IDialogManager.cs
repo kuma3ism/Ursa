@@ -41,8 +41,48 @@ namespace Ursa
     {
         /// <summary>バリアを表示しません。</summary>
         None,
-        /// <summary>半透明の黒いバリアを表示します（デフォルト）。</summary>
+        /// <summary>黒半透明のバリアを表示します。</summary>
         Dimmed,
+        /// <summary>GrabPass を使ったリアルタイムブラーを表示します。UrsaDialogManager.BarrierMaterial の設定が必要です。</summary>
+        RealtimeBlur,
+        /// <summary>画面キャプチャをぼかして表示します。処理負荷が高い場合があります。</summary>
+        ScreenshotBlur,
+    }
+
+    /// <summary>
+    /// RealtimeBlur の実装方式を指定します。
+    /// BarrierStyle は見た目の意図、RealtimeBlurMode は実装・品質方針を表します。
+    /// </summary>
+    public enum RealtimeBlurMode
+    {
+        /// <summary>
+        /// 環境に応じて UrsaDialogManager が方式を選択します。
+        /// Built-in RP → LegacyGrabPass、URP → ScreenshotBlur（BarrierStyle 側）へ自動降格。
+        /// </summary>
+        Auto,
+
+        /// <summary>Built-in Render Pipeline 向けの GrabPass ベース実装を使用します。</summary>
+        LegacyGrabPass,
+
+        /// <summary>
+        /// URP の _CameraOpaqueTexture を使った実装を使用します。
+        /// URP Asset または Camera 設定で Opaque Texture を有効にする必要があります。
+        /// </summary>
+        CameraOpaqueTexture,
+
+        /// <summary>
+        /// URP の ScriptableRendererFeature でコピーしたカメラカラーを使用します。
+        /// 使用する Universal Renderer Data に UrsaDialogBlurRendererFeature を追加する必要があります。
+        /// </summary>
+        RendererFeature,
+
+        /// <summary>
+        /// リアルタイムブラーが使えない環境向けのフォールバック。
+        /// BarrierStyle.ScreenshotBlur と同じ処理を行うため、本来は BarrierStyle 側で
+        /// "RealtimeBlurWithFallback" のような値として表現する方が設計として自然。
+        /// TODO: BarrierStyle にフォールバック付きバリアントを追加し、このモードを廃止する。
+        /// </summary>
+        ScreenshotFallback,
     }
 
     /// <summary>

@@ -38,7 +38,12 @@ namespace Ursa
                 }
 
                 // 未登録のデフォルトトランジションを補完する
-                if (_instance.SetupDefaultTransitions())
+                bool dirty = _instance.SetupDefaultTransitions();
+
+                // デフォルトダイアログバリアマテリアルを生成
+                dirty |= _instance.SetupDefaultDialogMaterials();
+
+                if (dirty)
                 {
                     UnityEditor.EditorUtility.SetDirty(_instance);
                     UnityEditor.AssetDatabase.SaveAssets();
@@ -101,6 +106,69 @@ namespace Ursa
                 }
             }
             return dirty;
+        }
+
+        /// <summary>
+        /// デフォルトのダイアログバリア用マテリアルを生成します。
+        /// 既に存在する場合は上書きしません。
+        /// </summary>
+        /// <returns>1件以上作成された場合は true。</returns>
+        private bool SetupDefaultDialogMaterials()
+        {
+            string dir = "Assets/Resources/Ursa";
+            if (!System.IO.Directory.Exists(dir))
+            {
+                System.IO.Directory.CreateDirectory(dir);
+                UnityEditor.AssetDatabase.Refresh();
+            }
+
+            bool dirty = false;
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaRealtimeBlur.mat",
+                "Assets/Ursa/Runtime/Dialogs/Shaders/UrsaDialogBlur.shader",
+                "_BlurSize", 4.0f);
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaCameraOpaqueTextureBlur.mat",
+                "Assets/Ursa/Runtime/Dialogs/Shaders/UrsaCameraOpaqueTextureBlur.shader",
+                "_BlurSize", 4.0f);
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaRendererFeatureBlur.mat",
+                "Assets/Ursa/Runtime/Dialogs/Shaders/UrsaRendererFeatureBlur.shader",
+                "_BlurSize", 4.0f);
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaScreenshotBlur.mat",
+                "Assets/Ursa/Runtime/Dialogs/Shaders/UrsaScreenshotBlur.shader",
+                "_BlurSize", 2.0f);
+
+            return dirty;
+        }
+
+        /// <summary>
+        /// 指定パスにマテリアルが存在しなければ、指定シェーダーから新規作成します。
+        /// </summary>
+        private bool CreateDialogMaterialIfNeeded(string materialPath, string shaderPath, string blurSizeProperty, float defaultBlurSize)
+        {
+            if (UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null)
+                return false;
+
+            var shader = UnityEditor.AssetDatabase.LoadAssetAtPath<Shader>(shaderPath);
+            if (shader == null)
+            {
+                Debug.LogWarning($"[Ursa] ダイアログバリア用シェーダーが見つかりません: {shaderPath}");
+                return false;
+            }
+
+            var material = new Material(shader);
+            if (material.HasProperty(blurSizeProperty))
+                material.SetFloat(blurSizeProperty, defaultBlurSize);
+
+            UnityEditor.AssetDatabase.CreateAsset(material, materialPath);
+            Debug.Log($"[Ursa] Created default dialog barrier material: {materialPath}");
+            return true;
         }
 #endif
 
