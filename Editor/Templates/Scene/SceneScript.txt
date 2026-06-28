@@ -1,0 +1,31 @@
+using System.Threading.Tasks;
+using Ursa;
+
+#NAMESPACE_OPEN##INDENT#public class #CLASSNAME# : SceneBase<#CLASSNAME#.Parameter>
+#INDENT#{
+#INDENT#    public class Parameter : ISceneParameter { public string Message; }
+
+#INDENT#    protected override async Task OnInitializeAsync(Parameter parameter)
+#INDENT#    {
+#INDENT#        await Task.CompletedTask;
+#INDENT#    }
+
+#INDENT#    public override void OnResumeScene()
+#INDENT#    {
+#INDENT#    }
+
+#INDENT#    public override void OnPauseScene()
+#INDENT#    {
+#INDENT#    }
+
+#INDENT#    protected override async Task OnSceneWillClose()
+#INDENT#    {
+#INDENT#        await Task.CompletedTask;
+#INDENT#    }
+
+#INDENT#    protected override async Task OnBackKeyPressed()
+#INDENT#    {
+#INDENT#        await CloseAsync();
+#INDENT#    }
+#INDENT#}
+#NAMESPACE_CLOSE#

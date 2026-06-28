@@ -14,11 +14,14 @@ namespace Ursa
         /// <summary>このダイアログを履歴（スタック）に積むかどうか。デフォルトは true。</summary>
         bool IsHistory => true;
 
-        /// <summary>バリア（背景）タップで閉じることを許可するか。デフォルトは false。</summary>
+        /// <summary>バリアタップでダイアログを閉じることを許可するか。デフォルトは false。</summary>
         bool BarrierDismissible => false;
 
         /// <summary>ダイアログの配置先。デフォルトは Scene。</summary>
         DialogPlacement Placement => DialogPlacement.Scene;
+
+        /// <summary>バリアの表示スタイル。デフォルトは Dimmed（黒半透明）。</summary>
+        BarrierStyle BarrierStyle => BarrierStyle.Dimmed;
     }
 
     /// <summary>ダイアログの配置先を指定します。</summary>
@@ -28,6 +31,18 @@ namespace Ursa
         Scene,
         /// <summary>DontDestroyOnLoad として維持（システムエラー表示など）</summary>
         DontDestroyOnLoad,
+    }
+
+    /// <summary>
+    /// ダイアログの後ろに表示するバリアのスタイル。
+    /// UrsaDialogManager が最前面ダイアログの直下に自動配置します。
+    /// </summary>
+    public enum BarrierStyle
+    {
+        /// <summary>バリアを表示しません。</summary>
+        None,
+        /// <summary>半透明の黒いバリアを表示します（デフォルト）。</summary>
+        Dimmed,
     }
 
     /// <summary>
@@ -73,7 +88,6 @@ namespace Ursa
 
     /// <summary>
     /// UrsaDialogManager から型なしで OnOpenAsync / OnCloseAsync を呼ぶための非ジェネリック契約。
-    /// ISceneReceiver と同じ役割。
     /// </summary>
     public interface IDialogReceiverBase
     {
@@ -81,9 +95,7 @@ namespace Ursa
         Task OnCloseAsync(DialogCloseReason reason);
     }
 
-    /// <summary>
-    /// 型付きパラメーターを受け取る契約（ISceneReceiver&lt;T&gt; と同じ分担）
-    /// </summary>
+    /// <summary>型付きパラメーターを受け取る契約</summary>
     public interface IDialogReceiver<TParam> : IDialogReceiverBase
         where TParam : IDialogParameter
     {
@@ -107,10 +119,7 @@ namespace Ursa
         Task<TResult> WaitForCloseAsync();
     }
 
-    /// <summary>
-    /// ダイアログのライフサイクルイベントを外部へ公開する契約。
-    /// SceneBase の ISceneBackHandler と同じ思想。
-    /// </summary>
+    /// <summary>ダイアログのライフサイクルイベントを外部へ公開する契約。</summary>
     public interface IDialogLifecycleEvents
     {
         event Action Opened;
@@ -122,39 +131,21 @@ namespace Ursa
     /// <summary>ダイアログの生成・破棄・履歴管理を行うマネージャーのインターフェース</summary>
     public interface IDialogManager
     {
-        /// <summary>Open/Close 処理中かどうかを返します。</summary>
         bool IsTransitioning { get; }
-
-        /// <summary>現在表示中のダイアログが1件以上あるかどうかを返します。</summary>
         bool HasAnyDialog { get; }
-
-        /// <summary>現在の履歴スタックを古い順（インデックス0が最も古い）で返します。</summary>
         IReadOnlyList<IDialogHistoryEntry> History { get; }
-
-        /// <summary>指定したダイアログインスタンスが現在最前面（履歴のトップ）かどうかを返します。</summary>
         bool IsTopDialog(MonoBehaviour dialog);
 
-        /// <summary>
-        /// ダイアログを生成してオープンします。<br/>
-        /// parameter が IDialogResourcePreloader を実装していれば生成と並行してプリロードが走ります。<br/>
-        /// 同種ダイアログの多重表示は常に許可されます。
-        /// </summary>
         Task<TDialog> OpenAsync<TDialog, TResult>(
             IDialogParameter parameter,
             CancellationToken ct = default)
             where TDialog : MonoBehaviour, IDialogReceiverBase, IOpenDialog<TResult>, IDialogLifecycleEvents;
 
-        /// <summary>戻り値なし（Unit）ダイアログのショートハンド</summary>
         Task<TDialog> OpenAsync<TDialog>(
             IDialogParameter parameter,
             CancellationToken ct = default)
             where TDialog : MonoBehaviour, IDialogReceiverBase, IOpenDialog<Unit>, IDialogLifecycleEvents;
 
-        /// <summary>
-        /// Open → configure → WaitForClose を1行で行うショートハンド。<br/>
-        /// configure は非同期 UI 初期化にも対応するため Func&lt;TDialog, Task&gt;。<br/>
-        /// CloseAll 等の強制終了時は OperationCanceledException をスローします。
-        /// </summary>
         Task<TResult> OpenWithCloseAsync<TDialog, TResult>(
             IDialogParameter parameter,
             Func<TDialog, Task> configure = null,

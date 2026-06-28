@@ -1,0 +1,33 @@
+using System.Threading.Tasks;
+using Ursa;
+using Ursa.Dialogs;
+using UnityEngine;
+
+#NAMESPACE_OPEN##INDENT#public class #CLASSNAME# : DialogBase<#CLASSNAME#.Parameter>
+#INDENT#{
+#INDENT#    [SerializeField] private RectTransform _contentRoot;
+
+#INDENT#    public class Parameter : IDialogParameter
+#INDENT#    {
+#INDENT#        public bool IsHistory => true;
+#INDENT#        public bool BarrierDismissible => false;
+#INDENT#        public DialogPlacement Placement => #PLACEMENT#;
+#INDENT#        public BarrierStyle BarrierStyle => BarrierStyle.Dimmed;
+#INDENT#    }
+
+#INDENT#    protected override async Task OnOpenAsync(Parameter param)
+#INDENT#    {
+#INDENT#        await Task.CompletedTask;
+#INDENT#    }
+
+#INDENT#    protected override async Task OnCloseAsync(DialogCloseReason reason)
+#INDENT#    {
+#INDENT#        await Task.CompletedTask;
+#INDENT#    }
+
+#INDENT#    protected override async Task OnBackKeyPressed()
+#INDENT#    {
+#INDENT#        await CloseAsync(DialogCloseReason.BackKey);
+#INDENT#    }
+#INDENT#}
+#NAMESPACE_CLOSE#

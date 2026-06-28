@@ -1,0 +1,11 @@
+using Ursa;
+using Ursa.Dialogs;
+
+#NAMESPACE_OPEN##INDENT#public class #CLASSNAME#Parameter : IDialogParameter
+#INDENT#{
+#INDENT#    public bool IsHistory => true;
+#INDENT#    public bool BarrierDismissible => false;
+#INDENT#    public DialogPlacement Placement => #PLACEMENT#;
+#INDENT#    public BarrierStyle BarrierStyle => BarrierStyle.Dimmed;
+#INDENT#}
+#NAMESPACE_CLOSE#

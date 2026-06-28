@@ -242,42 +242,8 @@ namespace Ursa.Editor
 
         private static string GenerateScript(string name, string ns)
         {
-            string nsOpen  = string.IsNullOrWhiteSpace(ns) ? "" : $"namespace {ns}\n{{\n";
-            string nsClose = string.IsNullOrWhiteSpace(ns) ? "" : "}\n";
-            string i       = string.IsNullOrWhiteSpace(ns) ? "" : "    ";
-
-            return
-$@"using System.Threading.Tasks;
-using Ursa;
-
-{nsOpen}{i}public class {name} : SceneBase<{name}.Parameter>
-{i}{{
-{i}    public class Parameter : ISceneParameter {{ public string Message; }}
-
-{i}    protected override async Task OnInitializeAsync(Parameter parameter)
-{i}    {{
-{i}        await Task.CompletedTask;
-{i}    }}
-
-{i}    public override void OnResumeScene()
-{i}    {{
-{i}    }}
-
-{i}    public override void OnPauseScene()
-{i}    {{
-{i}    }}
-
-{i}    protected override async Task OnSceneWillClose()
-{i}    {{
-{i}        await Task.CompletedTask;
-{i}    }}
-
-{i}    protected override async Task OnBackKeyPressed()
-{i}    {{
-{i}        await CloseAsync();
-{i}    }}
-{i}}}
-{nsClose}";
+            string template = UrsaEditorTemplates.Load("Scene", "SceneScript.txt");
+            return UrsaEditorTemplates.Apply(template, ns, ("#CLASSNAME#", name));
         }
 
         // ────────────────────────────────────────────

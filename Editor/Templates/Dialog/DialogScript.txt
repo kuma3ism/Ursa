@@ -1,0 +1,25 @@
+using System.Threading.Tasks;
+using Ursa;
+using Ursa.Dialogs;
+using UnityEngine;
+
+#NAMESPACE_OPEN##INDENT#public class #CLASSNAME# : DialogBase<#PARAMTYPE#>
+#INDENT#{
+#INDENT#    [SerializeField] private RectTransform _contentRoot;
+
+#INDENT#    protected override async Task OnOpenAsync(#PARAMTYPE# param)
+#INDENT#    {
+#INDENT#        await Task.CompletedTask;
+#INDENT#    }
+
+#INDENT#    protected override async Task OnCloseAsync(DialogCloseReason reason)
+#INDENT#    {
+#INDENT#        await Task.CompletedTask;
+#INDENT#    }
+
+#INDENT#    protected override async Task OnBackKeyPressed()
+#INDENT#    {
+#INDENT#        await CloseAsync(DialogCloseReason.BackKey);
+#INDENT#    }
+#INDENT#}
+#NAMESPACE_CLOSE#

@@ -3,35 +3,34 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Ursa.Dialogs
 {
-    /// <summary>
-    /// 履歴エントリの内部実装
-    /// </summary>
+    /// <summary>履歴エントリの内部実装</summary>
     internal class DialogHistoryEntry : IDialogHistoryEntry
     {
-        public int Index { get; set; }
-        public string DialogName { get; set; }
-        public Type DialogType { get; set; }
-        public GameObject Instance { get; set; }
+        public int    Index            { get; set; }
+        public string DialogName       { get; set; }
+        public Type   DialogType       { get; set; }
+        public GameObject Instance     { get; set; }
         public IDialogReceiverBase ReceiverBase { get; set; }
+        public bool   BarrierDismissible { get; set; }
+        public BarrierStyle BarrierStyle { get; set; }
     }
 
     /// <summary>
-    /// Ursaフレームワークにおける、ダイアログの生成・破棄および履歴（スタック）管理を行う実体クラス。<br/>
-    /// IDialogManager の実装であり、UrsaCore.Initialize(IDialogManager) で登録して使用します。<br/>
-    ///<br/>
-    /// Prefab は IDialogLoader（デフォルト: ResourcesDialogLoader）で解決します。<br/>
-    /// コンストラクタに RectTransform defaultParent を渡すとダイアログの配置先を指定できます。
-    /// 渡さない場合は DontDestroyOnLoad な Canvas が自動生成されます。
+    /// Ursaフレームワークにおける、ダイアログの生成・破棄および履歴（スタック）管理を行う実体クラス。
+    ///
+    /// バリアは各ダイアログのプレファブには含めず、マネージャーが1枚を管理します。
+    /// 最前面ダイアログの直下に自動配置し、スタイル（Dimmed 等）を適用します。
     /// </summary>
     public class UrsaDialogManager : IDialogManager
     {
         // ---- 依存 ----
 
         private readonly IDialogLoader _loader;
-        private readonly IUrsaLogger _logger;
+        private readonly IUrsaLogger   _logger;
 
         // ---- 状態 ----
 
@@ -40,20 +39,24 @@ namespace Ursa.Dialogs
 
         // ---- Canvas 管理 ----
 
-        /// <summary>Scene 配置用のデフォルト親。null の場合は自動生成した DDOL Canvas を使用します。</summary>
         private readonly RectTransform _defaultParent;
-
         private Canvas _ddolCanvas;
+
+        // ---- Barrier 管理 ----
+
+        private GameObject _barrierObject;
+        private Image      _barrierImage;
+        private Button     _barrierButton;
+
+        /// <summary>Dimmed スタイル時のバリアの色。alpha で濃さを調整できます。</summary>
+        public Color DimmedColor { get; set; } = new Color(0f, 0f, 0f, 0.5f);
 
         // ---- ctor ----
 
-        /// <param name="defaultParent">ダイアログを配置する RectTransform。null なら DontDestroyOnLoad Canvas を自動生成。</param>
-        /// <param name="loader">Prefab ローダー。null なら ResourcesDialogLoader（Resources/Dialogs/）を使用。</param>
-        /// <param name="logger">ロガー。null なら NullUrsaLogger。</param>
         public UrsaDialogManager(
             RectTransform defaultParent = null,
-            IDialogLoader loader = null,
-            IUrsaLogger logger = null)
+            IDialogLoader loader        = null,
+            IUrsaLogger   logger        = null)
         {
             _defaultParent = defaultParent;
             _loader = loader ?? new ResourcesDialogLoader();
@@ -67,7 +70,7 @@ namespace Ursa.Dialogs
         // ---- IDialogManager ----
 
         public bool IsTransitioning => _transitionCount > 0;
-        public bool HasAnyDialog => _history.Count > 0;
+        public bool HasAnyDialog    => _history.Count > 0;
         public IReadOnlyList<IDialogHistoryEntry> History => _history;
 
         public bool IsTopDialog(MonoBehaviour dialog)
@@ -89,7 +92,6 @@ namespace Ursa.Dialogs
                 string name = typeof(TDialog).Name;
                 _logger.Log($"<color=cyan>[Ursa]</color> Dialog Opening: {name}");
 
-                // 1. Prefab ロード と リソースプリロード を並行実行
                 Task<GameObject> prefabTask = _loader.LoadAsync(name);
                 Task preloadTask = (parameter as IDialogResourcePreloader)
                     ?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
@@ -97,9 +99,8 @@ namespace Ursa.Dialogs
                 await Task.WhenAll(prefabTask, preloadTask);
                 var prefab = prefabTask.Result;
 
-                // 2. Instantiate
                 var parent = GetParent(parameter?.Placement ?? DialogPlacement.Scene);
-                var go = UnityEngine.Object.Instantiate(prefab, parent);
+                var go     = UnityEngine.Object.Instantiate(prefab, parent);
 
                 var dialog = go.GetComponent<TDialog>();
                 if (dialog == null)
@@ -109,25 +110,25 @@ namespace Ursa.Dialogs
                         $"[Ursa] Component {typeof(TDialog).Name} が Prefab のルートに見つかりませんでした。");
                 }
 
-                // 3. 履歴に積む（IsHistory == false なら積まない）
                 bool addToHistory = parameter == null || parameter.IsHistory;
                 if (addToHistory)
                 {
                     _history.Add(new DialogHistoryEntry
                     {
-                        Index = _history.Count,
-                        DialogName = name,
-                        DialogType = typeof(TDialog),
-                        Instance = go,
-                        ReceiverBase = dialog,
+                        Index              = _history.Count,
+                        DialogName         = name,
+                        DialogType         = typeof(TDialog),
+                        Instance           = go,
+                        ReceiverBase       = dialog,
+                        BarrierDismissible = parameter?.BarrierDismissible ?? false,
+                        BarrierStyle       = parameter?.BarrierStyle ?? BarrierStyle.Dimmed,
                     });
                     RebuildIndices();
+                    UpdateBarrier();
                 }
 
-                // 4. OnOpenAsync を呼ぶ
                 await dialog.OnOpenAsync(parameter);
 
-                // 5. CancellationToken が渡された場合は CloseAll に繋げる
                 if (ct.CanBeCanceled)
                 {
                     ct.Register(() =>
@@ -192,6 +193,7 @@ namespace Ursa.Dialogs
                     UnityEngine.Object.Destroy(entry.Instance);
 
                 _loader.Unload(entry.DialogName);
+                UpdateBarrier();
             }
             finally
             {
@@ -219,15 +221,94 @@ namespace Ursa.Dialogs
 
                     _loader.Unload(entry.DialogName);
                 }
+
+                RebuildIndices();
+                UpdateBarrier();
             }
             finally
             {
                 _transitionCount--;
-                RebuildIndices();
             }
         }
 
-        // ---- 内部ユーティリティ ----
+        // ---- Barrier 管理 ────────────────────────────────────────
+
+        /// <summary>
+        /// 履歴の状態に合わせてバリアを更新する。
+        /// Open / Close のたびに呼ぶ。
+        /// </summary>
+        private void UpdateBarrier()
+        {
+            // ダイアログが1件もなければ非表示
+            if (_history.Count == 0)
+            {
+                if (_barrierObject != null)
+                    _barrierObject.SetActive(false);
+                return;
+            }
+
+            var top          = _history[_history.Count - 1];
+            var topTransform = top.Instance.transform;
+            var topParent    = topTransform.parent;
+
+            // 親が変わっていたら作り直す
+            if (_barrierObject == null || _barrierObject.transform.parent != topParent)
+            {
+                if (_barrierObject != null)
+                    UnityEngine.Object.Destroy(_barrierObject);
+                CreateBarrier(topParent as RectTransform);
+            }
+
+            // スタイル適用
+            switch (top.BarrierStyle)
+            {
+                case BarrierStyle.Dimmed:
+                    _barrierObject.SetActive(true);
+                    _barrierImage.color = DimmedColor;
+                    break;
+
+                case BarrierStyle.None:
+                    _barrierObject.SetActive(false);
+                    return; // 位置調整不要
+            }
+
+            // 最前面ダイアログの直下に配置:
+            // Barrier を末尾 → top を末尾 とすると [..., Barrier, top] になる
+            _barrierObject.transform.SetAsLastSibling();
+            topTransform.SetAsLastSibling();
+        }
+
+        private void CreateBarrier(RectTransform parent)
+        {
+            var go = new GameObject("[UrsaBarrier]");
+            go.transform.SetParent(parent, false);
+
+            var rect      = go.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            _barrierImage               = go.AddComponent<Image>();
+            _barrierImage.color         = DimmedColor;
+            _barrierImage.raycastTarget = true;
+
+            // タップハンドラー（BarrierDismissible は tap 時に確認する）
+            _barrierButton            = go.AddComponent<Button>();
+            _barrierButton.transition = Selectable.Transition.None;
+            _barrierButton.onClick.AddListener(OnBarrierTapped);
+
+            _barrierObject = go;
+        }
+
+        private void OnBarrierTapped()
+        {
+            if (_history.Count == 0 || IsTransitioning) return;
+            if (_history[_history.Count - 1].BarrierDismissible)
+                _ = CloseTopAsync(DialogCloseReason.BarrierTap);
+        }
+
+        // ---- 内部ユーティリティ ────────────────────────────────
 
         private RectTransform GetParent(DialogPlacement placement)
         {
@@ -243,9 +324,10 @@ namespace Ursa.Dialogs
 
             var go = new GameObject("[UrsaDialogRoot]");
             UnityEngine.Object.DontDestroyOnLoad(go);
-            _ddolCanvas = go.AddComponent<Canvas>();
-            _ddolCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _ddolCanvas             = go.AddComponent<Canvas>();
+            _ddolCanvas.renderMode  = RenderMode.ScreenSpaceOverlay;
             _ddolCanvas.sortingOrder = 100;
+            go.AddComponent<GraphicRaycaster>(); // Barrier のタップ検知に必要
 
             _logger.Log("<color=cyan>[Ursa]</color> Dialog root canvas created (DontDestroyOnLoad).");
             return (RectTransform)go.transform;
