@@ -500,6 +500,46 @@ public class ConfirmDialogParameter : IDialogParameter
 > 現在の API では `BarrierStyle.Dimmed` を「未指定」として扱い、`UrsaDialogManager.DefaultBarrierStyle` を適用します。  
 > そのため `DefaultBarrierStyle = BarrierStyle.RealtimeBlur` の状態では、個別ダイアログだけを明示的に `Dimmed` に戻すことはできません。個別指定として使えるのは `None` / `RealtimeBlur` / `ScreenshotBlur` です。
 
+### リアルタイムブラー
+
+全ダイアログの既定バリアをリアルタイムブラーにする場合は、`UrsaDialogManager` を初期化する前に設定します。
+
+```csharp
+var dialogManager = new UrsaDialogManager
+{
+    DefaultBarrierStyle = BarrierStyle.RealtimeBlur,
+    RealtimeBlurMode = RealtimeBlurMode.Auto,
+    RealtimeBlurSize = 4.0f,
+    BlurOverlayColor = new Color(0f, 0f, 0f, 0.3f),
+};
+
+UrsaCore.Initialize(dialogManager);
+```
+
+個別ダイアログだけをブラーにしたい場合は、パラメーターで `BarrierStyle.RealtimeBlur` を返します。
+
+```csharp
+public class ConfirmDialogParameter : IDialogParameter
+{
+    BarrierStyle IDialogParameter.BarrierStyle => BarrierStyle.RealtimeBlur;
+}
+```
+
+`RealtimeBlurMode` は以下から選択できます。
+
+| Mode | 用途 | 必要な設定 |
+|---|---|---|
+| `Auto` | Render Pipeline に応じて自動選択 | URP では `RendererFeature` を優先 |
+| `LegacyGrabPass` | Built-in Render Pipeline 向け | GrabPass 対応 shader |
+| `CameraOpaqueTexture` | URP の `_CameraOpaqueTexture` を使う | URP Asset / Camera の Opaque Texture を有効化 |
+| `RendererFeature` | URP の RendererFeature で scene / UI 描画後の色をコピー | Universal Renderer Data に `UrsaDialogBlurRendererFeature` を追加 |
+| `ScreenshotFallback` | 開いた瞬間のスクリーンショットをぼかす | リアルタイムではなく静止画 |
+
+URP で `RendererFeature` を使う場合は、使用中の Universal Renderer Data の **Renderer Features** に `UrsaDialogBlurRendererFeature` を追加してください。未追加、または実行されていない場合は warning を出し、`ScreenshotBlur` へフォールバックします。`ScreenshotBlur` 用 material も見つからない場合は `Dimmed` にフォールバックします。
+
+> **Screen Space - Overlay について**
+> URP の `_CameraOpaqueTexture` / `RendererFeature` はカメラが描画した結果だけを入力にします。`Screen Space - Overlay` Canvas はカメラ描画後に合成されるため、ブラー元には含まれません。Ursa が管理する Scene UI / Dialog / Transition / Tap effect は `Screen Space - Camera` 前提で扱います。
+
 #### 2. ダイアログクラスの定義
 
 **戻り値あり**（確認ダイアログなど）：

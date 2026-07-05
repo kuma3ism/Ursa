@@ -76,6 +76,12 @@ namespace Ursa.Dialogs
         /// <summary>RealtimeBlur / ScreenshotBlur 時の色乗算。alpha で濃さを調整できます。</summary>
         public Color BlurOverlayColor { get; set; } = new Color(0f, 0f, 0f, 0.3f);
 
+        /// <summary>RealtimeBlur 時のブラー強度。値が大きいほどぼかしが強くなります。</summary>
+        public float RealtimeBlurSize { get; set; } = 4.0f;
+
+        /// <summary>ScreenshotBlur 時のブラー強度。値が大きいほどぼかしが強くなります。</summary>
+        public float ScreenshotBlurSize { get; set; } = 2.0f;
+
         /// <summary>ScreenshotBlur 時のブラー強度。値が大きいほどぼかしが強くなります。</summary>
         public int ScreenshotBlurIterations { get; set; } = 2;
 
@@ -291,6 +297,7 @@ namespace Ursa.Dialogs
                 if (_barrierObject != null)
                     _barrierObject.SetActive(false);
                 ReleaseScreenshotBlurTexture();
+                ReleaseRealtimeBlurMaterial();
                 return;
             }
 
@@ -426,10 +433,18 @@ namespace Ursa.Dialogs
 
             ReleaseScreenshotBlurTexture();
 
-            if (mode == Ursa.RealtimeBlurMode.RendererFeature && !WasRendererFeatureEnqueuedRecently() && !_hasWarnedRendererFeatureMissing)
+            bool rendererFeatureMissing = mode == Ursa.RealtimeBlurMode.RendererFeature && !WasRendererFeatureEnqueuedRecently();
+            if (rendererFeatureMissing && !_hasWarnedRendererFeatureMissing)
             {
                 _hasWarnedRendererFeatureMissing = true;
-                _logger.LogWarning("[Ursa] RealtimeBlurMode.RendererFeature is selected, but UrsaDialogBlurRendererFeature has not been enqueued recently. Add UrsaDialogBlurRendererFeature to the active Universal Renderer Data.");
+                _logger.LogWarning("[Ursa] RealtimeBlurMode.RendererFeature is selected, but UrsaDialogBlurRendererFeature has not been enqueued recently. Falling back to ScreenshotBlur. Add UrsaDialogBlurRendererFeature to the active Universal Renderer Data for realtime blur.");
+            }
+
+            if (rendererFeatureMissing)
+            {
+                SetBarrierImageActive(false);
+                ApplyScreenshotBlur();
+                return;
             }
 
             var realtimeMatSource = GetRealtimeBlurMaterial(mode);
@@ -437,6 +452,7 @@ namespace Ursa.Dialogs
             {
                 ReleaseRealtimeBlurMaterial();
                 _realtimeBlurMaterial = new Material(realtimeMatSource);
+                _realtimeBlurMaterial.SetFloat("_BlurSize", RealtimeBlurSize);
                 _realtimeBlurMaterial.SetColor("_OverlayColor", BlurOverlayColor);
 
                 if ((mode == Ursa.RealtimeBlurMode.CameraOpaqueTexture || mode == Ursa.RealtimeBlurMode.RendererFeature) && _barrierRawImage != null)
@@ -509,6 +525,7 @@ namespace Ursa.Dialogs
         private void ApplyScreenshotBlur()
         {
             if (_barrierRawImage == null) return;
+            ReleaseRealtimeBlurMaterial();
 
             var screenshotMatSource = GetScreenshotBlurMaterial();
             if (screenshotMatSource == null)
@@ -568,7 +585,7 @@ namespace Ursa.Dialogs
 
             var temp = RenderTexture.GetTemporary(rt.width, rt.height, 0, rt.format);
             var blurMaterial = new Material(screenshotMatSource);
-            blurMaterial.SetFloat("_BlurSize", 2.0f);
+            blurMaterial.SetFloat("_BlurSize", ScreenshotBlurSize);
             blurMaterial.SetColor("_OverlayColor", BlurOverlayColor);
 
             for (int i = 0; i < ScreenshotBlurIterations; i++)
