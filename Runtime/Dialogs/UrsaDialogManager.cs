@@ -555,7 +555,16 @@ namespace Ursa.Dialogs
             }
 
             Graphics.Blit(capture, rt);
+            yield return null;
             UnityEngine.Object.Destroy(capture);
+
+            if (_barrierObject == null || !_barrierObject.activeInHierarchy || _barrierRawImage == null)
+            {
+                rt.Release();
+                UnityEngine.Object.Destroy(rt);
+                _screenshotBlurCoroutine = null;
+                yield break;
+            }
 
             var temp = RenderTexture.GetTemporary(rt.width, rt.height, 0, rt.format);
             var blurMaterial = new Material(screenshotMatSource);
