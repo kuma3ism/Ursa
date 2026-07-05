@@ -20,7 +20,11 @@ namespace Ursa
         /// <summary>ダイアログの配置先。デフォルトは Scene。</summary>
         DialogPlacement Placement => DialogPlacement.Scene;
 
-        /// <summary>バリアの表示スタイル。デフォルトは Dimmed（黒半透明）。</summary>
+        /// <summary>
+        /// バリアの表示スタイル。
+        /// Dimmed は「未指定」として扱われ、UrsaDialogManager.DefaultBarrierStyle が適用されます。
+        /// 個別ダイアログで確実に指定できるのは None / RealtimeBlur / ScreenshotBlur です。
+        /// </summary>
         BarrierStyle BarrierStyle => BarrierStyle.Dimmed;
     }
 
@@ -41,7 +45,10 @@ namespace Ursa
     {
         /// <summary>バリアを表示しません。</summary>
         None,
-        /// <summary>黒半透明のバリアを表示します。</summary>
+        /// <summary>
+        /// 黒半透明のバリアを表示します。
+        /// IDialogParameter.BarrierStyle では「未指定」として扱われ、DefaultBarrierStyle が適用されます。
+        /// </summary>
         Dimmed,
         /// <summary>GrabPass を使ったリアルタイムブラーを表示します。UrsaDialogManager.BarrierMaterial の設定が必要です。</summary>
         RealtimeBlur,

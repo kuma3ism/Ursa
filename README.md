@@ -494,6 +494,11 @@ public class ConfirmDialogParameter : IDialogParameter
 | `IsHistory` | `true` | 履歴スタックに積むかどうか。`false` にすると積まれません |
 | `BarrierDismissible` | `false` | バリア（背景）タップで閉じることを許可するか |
 | `Placement` | `Scene` | `Scene`（defaultParent に配置）または `DontDestroyOnLoad` |
+| `BarrierStyle` | `Dimmed` | バリアの見た目。`None` / `RealtimeBlur` / `ScreenshotBlur` は個別指定として扱われます |
+
+> **BarrierStyle の注意**  
+> 現在の API では `BarrierStyle.Dimmed` を「未指定」として扱い、`UrsaDialogManager.DefaultBarrierStyle` を適用します。  
+> そのため `DefaultBarrierStyle = BarrierStyle.RealtimeBlur` の状態では、個別ダイアログだけを明示的に `Dimmed` に戻すことはできません。個別指定として使えるのは `None` / `RealtimeBlur` / `ScreenshotBlur` です。
 
 #### 2. ダイアログクラスの定義
 
