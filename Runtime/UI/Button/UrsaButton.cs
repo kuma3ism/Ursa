@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace Ursa.UI
@@ -19,51 +20,15 @@ namespace Ursa.UI
         [SerializeField, Min(0f), Tooltip("このボタン自身の連打防止インターバル（秒）です。\n0 なら同ボタンの連打は許可します。")]
         private float _gateInterval = 0.5f;
 
-        [Header("Global Block (グローバルボタンブロック)")]
-        [SerializeField, Tooltip("グローバルボタンブロックを無視するかどうか。\ntrue にすると他のボタンのハンドラー実行中でもこのボタンは押せるようになります。")]
-        private bool _ignoreGlobalBlock = false;
-
-        // ---- 全ボタン共通の管理（UrsaButtonLoop） ----
-
-        private static UrsaButtonLoop _loop;
+        [Header("Group Block (グループボタンブロック)")]
+        [SerializeField, Tooltip("グループボタンブロックを無視するかどうか。\ntrue にすると同じグループの他ボタンのハンドラー実行中でもこのボタンは押せるようになります。")]
+        [FormerlySerializedAs("_ignoreGlobalBlock")]
+        private bool _ignoreGroupBlock = false;
 
         /// <summary>
         /// 実行停止からブロック解除までの猶予時間（バッファ）。
         /// </summary>
-        internal const float GlobalBlockBuffer = 0.2f;
-
-        // ドメインリロード無効時に静的フィールドが残るため、再生前に必ずリセットする
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatic()
-        {
-            _loop = null;
-        }
-
-        /// <summary>
-        /// グローバルボタンブロック管理オブジェクトを生成する（遅延生成）。
-        /// シーンに紐づけて生成するため、DontDestroyOnLoad は使用しない。
-        /// シーン遷移で破棄された場合は次の UrsaButton.Awake 時に再生成される。
-        /// </summary>
-        private static void InitializeLoop()
-        {
-            // 既に生成済みなら何もしない（二重生成防止）
-            if (_loop != null) return;
-
-            var go = new GameObject("[UrsaButtonLoop]");
-            go.hideFlags = HideFlags.HideInHierarchy;
-            // DontDestroyOnLoad は使用しない。シーン遷移で破棄される前提。
-            _loop = go.AddComponent<UrsaButtonLoop>();
-            // Awake で SetActive(false) されるので、ここでは何もしない
-        }
-
-        /// <summary>
-        /// 必要に応じてループを遅延生成する（_loop が null なら生成）。
-        /// 各 UrsaButton の Awake 時に呼ばれる。
-        /// </summary>
-        private static void EnsureLoop()
-        {
-            if (_loop == null) InitializeLoop();
-        }
+        internal const float GroupBlockBuffer = 0.2f;
 
         // ---- 個別の状態管理 ----
 
@@ -73,6 +38,11 @@ namespace Ursa.UI
         private CancellationTokenSource _destroyCts;
         private float _selfBlockUntil = float.MinValue;
         private bool _isHandlerRunning;
+
+        // ---- グループブロックのスコープ（Dialog / Scene / UrsaButtonGroup 等が実装するインスタンス） ----
+        private IUrsaButtonBlockScope _blockScope;
+        private bool _hasBlockScope;
+        private IUrsaButtonBlockScope _runningBlockScope;
 
         // ---- 長押し ----
 
@@ -95,20 +65,13 @@ namespace Ursa.UI
             // ★ IUrsaButtonAction をキャッシュ（SetOnClick とは独立して InvokeHandlerAsync 内で実行される）
             _buttonActions = GetComponents<IUrsaButtonAction>();
 
-            // グローバルループを遅延生成（最初の UrsaButton.Awake で生成される）
-            EnsureLoop();
+            ResolveAndCacheBlockScope();
         }
 
         private void OnDisable()
         {
             if (_isHandlerRunning)
-            {
-                if (_loop != null)
-                {
-                    _loop.gameObject.SetActive(false);
-                    _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
-                }
-            }
+                _runningBlockScope?.End(Time.unscaledTime);
             _isHandlerRunning = false;
 
             // _handlerCts を再生成する設計:
@@ -120,6 +83,18 @@ namespace Ursa.UI
             _handlerCts = new CancellationTokenSource();
 
             ResetHoldState();
+        }
+
+        private void OnEnable()
+        {
+            if (!_hasBlockScope)
+                ResolveAndCacheBlockScope();
+        }
+
+        private void OnTransformParentChanged()
+        {
+            // 親が変わるとスコープ（Dialog / Scene / Group）も変わりうるので再解決する
+            ResolveAndCacheBlockScope();
         }
 
         private void OnDestroy()
@@ -185,7 +160,8 @@ namespace Ursa.UI
         }
 
         public void SetGateInterval(float seconds) => _gateInterval = Mathf.Max(0f, seconds);
-        public void SetIgnoreGlobalBlock(bool ignore) => _ignoreGlobalBlock = ignore;
+        public void SetIgnoreGlobalBlock(bool ignore) => SetIgnoreGroupBlock(ignore);
+        public void SetIgnoreGroupBlock(bool ignore) => _ignoreGroupBlock = ignore;
 
         // ---- 長押し API ----
 
@@ -216,9 +192,9 @@ namespace Ursa.UI
 
             if (_onHolding == null && _onHoldComplete == null) return;
 
-            // グローバルブロック中は長押しを開始しない（他のボタン実行中は触っていないものとする）
+            // 同一グループのブロック中は長押しを開始しない。
             var now = Time.unscaledTime;
-            if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
+            if (IsGroupBlocked(now)) return;
 
             _isHoldingActive = true;
             if (_holdCoroutine != null) StopCoroutine(_holdCoroutine);
@@ -257,7 +233,7 @@ namespace Ursa.UI
 
         private System.Collections.IEnumerator HoldCoroutine()
         {
-            // Time.unscaledTime（グローバルブロック）と評価基準を合わせるため unscaledDeltaTime を使用
+            // Time.unscaledTime（ブロック判定）と評価基準を合わせるため unscaledDeltaTime を使用
             // Time.timeScale = 0（ポーズ中）でも長押し判定が固まらない
             var elapsed = 0f;
             while (elapsed < _holdDuration)
@@ -288,11 +264,12 @@ namespace Ursa.UI
             // 長押し完了もボタン実行の一種とみなし、連打ブロックを適用する
             var now = Time.unscaledTime;
             if (now < _selfBlockUntil) return;
-            if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return; // ★ _loop null チェック追加
+            if (IsGroupBlocked(now)) return;
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
             _isHandlerRunning = true;
-            _loop.gameObject.SetActive(true);
+            _runningBlockScope = GetBlockScope();
+            _runningBlockScope?.Begin();
 
             var token = _destroyCts?.Token ?? CancellationToken.None;
             try { await _onHoldComplete(token); }
@@ -301,11 +278,8 @@ namespace Ursa.UI
             finally
             {
                 _isHandlerRunning = false;
-                if (_loop != null)
-                {
-                    _loop.gameObject.SetActive(false);
-                    _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
-                }
+                _runningBlockScope?.End(Time.unscaledTime);
+                _runningBlockScope = null;
             }
         }
 
@@ -323,13 +297,12 @@ namespace Ursa.UI
             var now = Time.unscaledTime;
 
             if (now < _selfBlockUntil) return;
-            // _loop は DontDestroyOnLoad しないため、シーン遷移直後は fake null になる可能性がある
-            if (_loop == null) EnsureLoop();
-            if (!_ignoreGlobalBlock && _loop != null && (_loop.gameObject.activeSelf || now < _loop.GlobalBlockUntil)) return;
+            if (IsGroupBlocked(now)) return;
 
             _selfBlockUntil = now + Mathf.Max(0f, _gateInterval);
             _isHandlerRunning = true;
-            _loop.gameObject.SetActive(true); // Update を起動
+            _runningBlockScope = GetBlockScope();
+            _runningBlockScope?.Begin();
 
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 _destroyCts?.Token ?? CancellationToken.None,
@@ -352,12 +325,56 @@ namespace Ursa.UI
             finally
             {
                 _isHandlerRunning = false;
-                if (_loop != null)
-                {
-                    _loop.gameObject.SetActive(false); // Update を止める
-                    _loop.GlobalBlockUntil = Time.unscaledTime + GlobalBlockBuffer;
-                }
+                _runningBlockScope?.End(Time.unscaledTime);
+                _runningBlockScope = null;
             }
+        }
+
+        // ---- スコープ解決 ----
+        // 中央集権的な static ストアは持たない。ブロック状態は、祖先にある
+        // Dialog / Scene / UrsaButtonGroup など IUrsaButtonBlockScope を実装するオブジェクト自身が持つ。
+        // どれも見つからない場合のみ、最寄りの Canvas（無ければ自分自身）に
+        // フォールバック用の小さなコンポーネントを自動追加する。
+
+        private bool IsGroupBlocked(float now)
+        {
+            if (_ignoreGroupBlock)
+                return false;
+
+            var scope = GetBlockScope();
+            return scope != null && scope.IsBlocked(now);
+        }
+
+        private IUrsaButtonBlockScope GetBlockScope()
+        {
+            if (!_hasBlockScope)
+                ResolveAndCacheBlockScope();
+            return _blockScope;
+        }
+
+        private void ResolveAndCacheBlockScope()
+        {
+            _blockScope = ResolveBlockScope();
+            _hasBlockScope = true;
+        }
+
+        private IUrsaButtonBlockScope ResolveBlockScope()
+        {
+            // 祖先（自分自身を含む）で最も近い IUrsaButtonBlockScope 実装を採用する。
+            // UrsaButtonGroup / Dialog（DialogBase） / Scene（SceneBase）はいずれもこれを実装している。
+            var scope = GetComponentInParent<IUrsaButtonBlockScope>(true);
+            if (scope != null)
+                return scope;
+
+            // どれも見つからない場合のフォールバック：最寄りの Canvas（無ければ自分自身）に
+            // 小さな保持用コンポーネントを生やす。
+            var canvas = GetComponentInParent<Canvas>(true);
+            var anchorTarget = canvas != null ? canvas.gameObject : gameObject;
+
+            var anchor = anchorTarget.GetComponent<UrsaButtonBlockAnchor>();
+            if (anchor == null)
+                anchor = anchorTarget.AddComponent<UrsaButtonBlockAnchor>();
+            return anchor;
         }
     }
 }

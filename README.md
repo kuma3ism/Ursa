@@ -665,13 +665,13 @@ UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader
 
 ## UrsaButton
 
-`UrsaButton` は Unity の `Button` コンポーネントに連打防止・グローバルブロック・長押しを追加する UI コンポーネントです。  
+`UrsaButton` は Unity の `Button` コンポーネントに連打防止・グループブロック・長押しを追加する UI コンポーネントです。
 `Button` コンポーネントと同じ GameObject に追加して使います。
 
 ### セットアップ
 
 Prefab または GameObject に `UrsaButton` コンポーネントを追加するだけで動作します。  
-内部の `UrsaButtonLoop` はシーンロード時に自動生成されます（ヒエラルキーには表示されません）。
+同じ GameObject にある Unity 標準の `Button` と連携し、クリック処理・連打防止・長押しをまとめて扱えます。
 
 ### インターフェース（IUrsaButton）
 
@@ -740,7 +740,7 @@ public class MyButtonEffect : MonoBehaviour, IUrsaButtonAction
 ```
 
 > **Note:** `IUrsaButtonAction.Execute()` は `SetOnClick` ハンドラーより先に呼ばれます。  
-> グローバルブロック・セルフブロックは両方に同様に適用されます。
+> グループブロック・セルフブロックは両方に同様に適用されます。
 
 ### ゲート設定（連打防止）
 
@@ -755,16 +755,21 @@ _button.SetGateInterval(0f);   // 連打を許可する
 
 Inspector の **Self Block** ヘッダーからも設定できます。
 
-#### グローバルブロック
+#### グループブロック
 
-いずれかのボタンのハンドラーが実行中は、他のボタンも押せなくなります（デフォルト有効）。  
-特定のボタンをブロック対象外にしたい場合は `SetIgnoreGlobalBlock` を使います。
+同じグループに属するボタンのハンドラーが実行中は、そのグループ内の他のボタンも押せなくなります（デフォルト有効）。
+
+グループは自動判定されます。親に `UrsaButtonGroup` があればそれを使い、なければ `DialogBase` / `SceneBase` / Canvas / 自分自身の順にフォールバックします。
+Dialog と Scene はそれぞれ独立したスコープになるため、シーン側のボタンで `OpenWithCloseAsync` のようにダイアログが閉じるまで待っていても、開いたダイアログ内の OK / Cancel ボタンは別スコープとして押せます。
+
+任意の UI パネル内だけをひとまとめにしたい場合は、親 GameObject に `UrsaButtonGroup` を追加します。
 
 ```csharp
-_button.SetIgnoreGlobalBlock(true); // グローバルブロックを無視する
+_button.SetIgnoreGroupBlock(true);       // グループブロックを無視する
+_button.SetIgnoreGlobalBlock(true);      // 互換用の旧名
 ```
 
-Inspector の **Global Block** ヘッダーからも設定できます。
+Inspector の **Group Block** ヘッダーからも設定できます。
 
 ### キャンセル
 
@@ -878,7 +883,7 @@ _button.SetOnLongClickAsync(
 | 項目 | デフォルト | 説明 |
 |---|---|---|
 | Gate Interval | `0.5` | セルフブロックのインターバル（秒）。0 で無効 |
-| Ignore Global Block | `false` | true にするとグローバルブロックを無視する |
+| Ignore Group Block | `false` | true にすると同じグループのブロックを無視する |
 
 ## License
 

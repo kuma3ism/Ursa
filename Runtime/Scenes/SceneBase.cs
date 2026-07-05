@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Ursa.UI;
 
 namespace Ursa
 {
@@ -8,9 +9,17 @@ namespace Ursa
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver, IUrsaButtonBlockScope where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
+
+        // ---- IUrsaButtonBlockScope ----
+        // このシーンインスタンス自体がスコープなので、シーン直下の UrsaButton 同士は
+        // このブロック状態を共有する。
+        private readonly UrsaButtonBlockState _buttonBlockState = new UrsaButtonBlockState();
+        bool IUrsaButtonBlockScope.IsBlocked(float now) => _buttonBlockState.IsBlocked(now);
+        void IUrsaButtonBlockScope.Begin() => _buttonBlockState.Begin();
+        void IUrsaButtonBlockScope.End(float now) => _buttonBlockState.End(now);
 
         /// <summary>バックキー（Escape）による自動戻り処理を有効/無効にします。</summary>
         protected void SetBackKeyEnabled(bool enabled) => _handleBackKey = enabled;
