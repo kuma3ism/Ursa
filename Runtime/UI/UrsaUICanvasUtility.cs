@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -8,6 +9,8 @@ namespace Ursa.UI
     /// </summary>
     public static class UrsaUICanvasUtility
     {
+        private static readonly HashSet<int> WarnedOverlayCanvasIds = new HashSet<int>();
+
         public static void ConfigureSceneCanvas(Canvas canvas, int sceneIndex)
         {
             Configure(canvas, UrsaUIRenderOrder.SceneBase + sceneIndex * UrsaUIRenderOrder.SceneStep);
@@ -53,8 +56,10 @@ namespace Ursa.UI
                 var markers = root.GetComponentsInChildren<UrsaUICanvas>(true);
                 foreach (var marker in markers)
                 {
-                    ConfigureSceneCanvas(marker.GetComponent<Canvas>(), sceneIndex);
-                    marker.GetComponent<Canvas>().enabled = visible;
+                    var canvas = marker.GetComponent<Canvas>();
+                    WarnIfOverlayCanvas(canvas, "UrsaUICanvas marker");
+                    ConfigureSceneCanvas(canvas, sceneIndex);
+                    canvas.enabled = visible;
                 }
 
                 var canvases = root.GetComponentsInChildren<Canvas>(true);
@@ -65,13 +70,19 @@ namespace Ursa.UI
 
                     if (canvas.gameObject.name == "UiCanvas")
                     {
+                        WarnIfOverlayCanvas(canvas, "UiCanvas");
                         ConfigureSceneCanvas(canvas, sceneIndex);
                         canvas.enabled = visible;
                     }
                     else if (canvas.gameObject.name == "TapEffectCanvas" || canvas.gameObject.name == "[Ursa] TapEffectCanvas")
                     {
+                        WarnIfOverlayCanvas(canvas, "TapEffectCanvas");
                         ConfigureTapEffectCanvas(canvas);
                         canvas.enabled = visible;
+                    }
+                    else
+                    {
+                        WarnIfOverlayCanvas(canvas, "unmanaged canvas");
                     }
                 }
             }
@@ -96,6 +107,18 @@ namespace Ursa.UI
             go.layer = layer;
             foreach (Transform child in go.transform)
                 SetLayerRecursively(child.gameObject, layer);
+        }
+
+        private static void WarnIfOverlayCanvas(Canvas canvas, string context)
+        {
+            if (canvas == null || canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                return;
+
+            int id = canvas.GetInstanceID();
+            if (!WarnedOverlayCanvasIds.Add(id))
+                return;
+
+            Debug.LogWarning($"[Ursa] Screen Space - Overlay Canvas detected ({context}): {canvas.name}. Ursa-managed realtime blur only includes camera-rendered UI. Use Screen Space - Camera / UrsaUICanvas for blur-compatible UI.");
         }
     }
 }
