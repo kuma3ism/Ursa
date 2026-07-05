@@ -1,5 +1,6 @@
+using System;
+using System.Collections;
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 
 namespace Ursa.UI
 {
@@ -9,7 +10,20 @@ namespace Ursa.UI
     public static class UrsaUICamera
     {
         private const string CameraName = "[Ursa] UICamera";
+        private const string UniversalCameraDataTypeName =
+            "UnityEngine.Rendering.Universal.UniversalAdditionalCameraData, Unity.RenderPipelines.Universal.Runtime";
+        private const string CameraRenderTypeTypeName =
+            "UnityEngine.Rendering.Universal.CameraRenderType, Unity.RenderPipelines.Universal.Runtime";
+        private const string AntialiasingModeTypeName =
+            "UnityEngine.Rendering.Universal.AntialiasingMode, Unity.RenderPipelines.Universal.Runtime";
+        private const string CameraOverrideOptionTypeName =
+            "UnityEngine.Rendering.Universal.CameraOverrideOption, Unity.RenderPipelines.Universal.Runtime";
+
         private static Camera _camera;
+        private static Type _universalCameraDataType;
+        private static Type _cameraRenderTypeType;
+        private static Type _antialiasingModeType;
+        private static Type _cameraOverrideOptionType;
 
         public static Camera Ensure()
         {
@@ -29,7 +43,7 @@ namespace Ursa.UI
                 _camera = go.AddComponent<Camera>();
             }
 
-            Object.DontDestroyOnLoad(_camera.gameObject);
+            UnityEngine.Object.DontDestroyOnLoad(_camera.gameObject);
             Configure(_camera);
             return _camera;
         }
@@ -43,20 +57,23 @@ namespace Ursa.UI
             if (baseCamera == uiCamera)
                 return;
 
-            var baseData = GetOrAddCameraData(baseCamera);
-            if (baseData.renderType != CameraRenderType.Base)
+            var baseData = GetOrAddUniversalCameraData(baseCamera);
+            if (baseData == null)
+                return;
+            if (!HasEnumPropertyValue(baseData, "renderType", "Base"))
                 return;
 
-            var uiData = GetOrAddCameraData(uiCamera);
-            uiData.renderType = CameraRenderType.Overlay;
+            var uiData = GetOrAddUniversalCameraData(uiCamera);
+            if (uiData == null)
+                return;
 
-            if (!baseData.cameraStack.Contains(uiCamera))
-                baseData.cameraStack.Add(uiCamera);
+            SetEnumPropertyValue(uiData, "renderType", "Overlay");
+            AddCameraToStack(baseData, uiCamera);
         }
 
         public static void AttachToActiveBaseCameras()
         {
-            var cameras = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            var cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
             foreach (var camera in cameras)
             {
                 if (camera != null && camera.enabled)
@@ -78,20 +95,88 @@ namespace Ursa.UI
             camera.allowMSAA = false;
             camera.useOcclusionCulling = false;
 
-            var cameraData = GetOrAddCameraData(camera);
-            cameraData.renderType = CameraRenderType.Overlay;
-            cameraData.renderPostProcessing = false;
-            cameraData.antialiasing = AntialiasingMode.None;
-            cameraData.requiresColorOption = CameraOverrideOption.Off;
-            cameraData.requiresDepthOption = CameraOverrideOption.Off;
+            var cameraData = GetOrAddUniversalCameraData(camera);
+            if (cameraData == null)
+                return;
+
+            SetEnumPropertyValue(cameraData, "renderType", "Overlay");
+            SetPropertyValue(cameraData, "renderPostProcessing", false);
+            SetEnumPropertyValue(cameraData, "antialiasing", "None");
+            SetEnumPropertyValue(cameraData, "requiresColorOption", "Off");
+            SetEnumPropertyValue(cameraData, "requiresDepthOption", "Off");
         }
 
-        private static UniversalAdditionalCameraData GetOrAddCameraData(Camera camera)
+        private static Component GetOrAddUniversalCameraData(Camera camera)
         {
-            var cameraData = camera.GetComponent<UniversalAdditionalCameraData>();
+            var cameraDataType = GetUniversalCameraDataType();
+            if (cameraDataType == null)
+                return null;
+
+            var cameraData = camera.GetComponent(cameraDataType);
             if (cameraData == null)
-                cameraData = camera.gameObject.AddComponent<UniversalAdditionalCameraData>();
+                cameraData = camera.gameObject.AddComponent(cameraDataType);
             return cameraData;
+        }
+
+        private static Type GetUniversalCameraDataType()
+        {
+            return _universalCameraDataType ??= Type.GetType(UniversalCameraDataTypeName);
+        }
+
+        private static bool HasEnumPropertyValue(object target, string propertyName, string valueName)
+        {
+            var property = target.GetType().GetProperty(propertyName);
+            if (property == null)
+                return false;
+
+            var value = property.GetValue(target);
+            return value != null && string.Equals(value.ToString(), valueName, StringComparison.Ordinal);
+        }
+
+        private static void SetEnumPropertyValue(object target, string propertyName, string valueName)
+        {
+            var property = target.GetType().GetProperty(propertyName);
+            if (property == null || !property.CanWrite)
+                return;
+
+            var enumType = property.PropertyType;
+            if (!enumType.IsEnum)
+                enumType = ResolveUniversalEnumType(propertyName);
+            if (enumType == null || !enumType.IsEnum)
+                return;
+
+            var value = Enum.Parse(enumType, valueName);
+            property.SetValue(target, value);
+        }
+
+        private static Type ResolveUniversalEnumType(string propertyName)
+        {
+            return propertyName switch
+            {
+                "renderType" => _cameraRenderTypeType ??= Type.GetType(CameraRenderTypeTypeName),
+                "antialiasing" => _antialiasingModeType ??= Type.GetType(AntialiasingModeTypeName),
+                "requiresColorOption" or "requiresDepthOption" => _cameraOverrideOptionType ??= Type.GetType(CameraOverrideOptionTypeName),
+                _ => null,
+            };
+        }
+
+        private static void SetPropertyValue(object target, string propertyName, object value)
+        {
+            var property = target.GetType().GetProperty(propertyName);
+            if (property == null || !property.CanWrite)
+                return;
+
+            property.SetValue(target, value);
+        }
+
+        private static void AddCameraToStack(object baseCameraData, Camera uiCamera)
+        {
+            var property = baseCameraData.GetType().GetProperty("cameraStack");
+            if (property?.GetValue(baseCameraData) is not IList cameraStack)
+                return;
+
+            if (!cameraStack.Contains(uiCamera))
+                cameraStack.Add(uiCamera);
         }
     }
 }

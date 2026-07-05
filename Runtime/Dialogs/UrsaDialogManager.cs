@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
-using Ursa.Dialogs.Rendering;
 using Ursa.UI;
 
 namespace Ursa.Dialogs
@@ -427,7 +426,7 @@ namespace Ursa.Dialogs
 
             ReleaseScreenshotBlurTexture();
 
-            if (mode == Ursa.RealtimeBlurMode.RendererFeature && !UrsaDialogBlurRendererFeature.WasEnqueuedRecently && !_hasWarnedRendererFeatureMissing)
+            if (mode == Ursa.RealtimeBlurMode.RendererFeature && !WasRendererFeatureEnqueuedRecently() && !_hasWarnedRendererFeatureMissing)
             {
                 _hasWarnedRendererFeatureMissing = true;
                 _logger.LogWarning("[Ursa] RealtimeBlurMode.RendererFeature is selected, but UrsaDialogBlurRendererFeature has not been enqueued recently. Add UrsaDialogBlurRendererFeature to the active Universal Renderer Data.");
@@ -476,6 +475,29 @@ namespace Ursa.Dialogs
                 return Ursa.RealtimeBlurMode.RendererFeature;
 
             return Ursa.RealtimeBlurMode.LegacyGrabPass;
+        }
+
+        private static bool WasRendererFeatureEnqueuedRecently()
+        {
+            var type = FindType("Ursa.Dialogs.Rendering.UrsaDialogBlurRendererFeature");
+            var property = type?.GetProperty("WasEnqueuedRecently", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            return property?.GetValue(null) is bool wasEnqueuedRecently && wasEnqueuedRecently;
+        }
+
+        private static Type FindType(string fullName)
+        {
+            var type = Type.GetType(fullName);
+            if (type != null)
+                return type;
+
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = assembly.GetType(fullName);
+                if (type != null)
+                    return type;
+            }
+
+            return null;
         }
 
         // ---- ScreenshotBlur 管理 ─────────────────────────────────
