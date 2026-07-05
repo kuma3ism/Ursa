@@ -54,6 +54,16 @@ namespace Ursa.UI
                 baseData.cameraStack.Add(uiCamera);
         }
 
+        public static void AttachToActiveBaseCameras()
+        {
+            var cameras = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            foreach (var camera in cameras)
+            {
+                if (camera != null && camera.enabled)
+                    AttachToBaseCamera(camera);
+            }
+        }
+
         private static void Configure(Camera camera)
         {
             int uiLayer = LayerMask.NameToLayer("UI");

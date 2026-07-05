@@ -9,6 +9,10 @@ namespace Ursa.Dialogs.Rendering
 {
     public sealed class UrsaDialogBlurRendererFeature : ScriptableRendererFeature
     {
+        private static int _lastEnqueuedFrame = -1000;
+
+        public static bool WasEnqueuedRecently => Time.frameCount - _lastEnqueuedFrame <= 2;
+
         [Serializable]
         public sealed class Settings
         {
@@ -30,11 +34,16 @@ namespace Ursa.Dialogs.Rendering
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
+            var cameraType = renderingData.cameraData.cameraType;
+            if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
+                return;
+
             if (_pass == null)
                 Create();
 
             _pass.Setup(_settings);
             renderer.EnqueuePass(_pass);
+            _lastEnqueuedFrame = Time.frameCount;
         }
 
         protected override void Dispose(bool disposing)
@@ -57,8 +66,10 @@ namespace Ursa.Dialogs.Rendering
                 _textureId = Shader.PropertyToID(_settings.TextureName);
             }
 
+            [Obsolete("Compatibility-mode path for URP versions that do not execute RenderGraph passes.")]
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
+#pragma warning disable 0618
                 var descriptor = renderingData.cameraData.cameraTargetDescriptor;
                 descriptor.depthBufferBits = 0;
                 descriptor.msaaSamples = 1;
@@ -73,6 +84,7 @@ namespace Ursa.Dialogs.Rendering
                     _settings.FilterMode,
                     TextureWrapMode.Clamp,
                     name: _settings.TextureName);
+#pragma warning restore 0618
             }
 
 
@@ -109,8 +121,10 @@ namespace Ursa.Dialogs.Rendering
                 builder.SetGlobalTextureAfterPass(destination, _textureId);
             }
 
+            [Obsolete("Compatibility-mode path for URP versions that do not execute RenderGraph passes.")]
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
+#pragma warning disable 0618
                 var cameraType = renderingData.cameraData.cameraType;
                 if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
                     return;
@@ -125,6 +139,7 @@ namespace Ursa.Dialogs.Rendering
 
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
+#pragma warning restore 0618
             }
 
             public void Dispose()

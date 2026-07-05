@@ -23,6 +23,15 @@ namespace Ursa.UI
             Configure(canvas, UrsaUIRenderOrder.Transition);
         }
 
+        public static void ConfigureManagedObject(GameObject go)
+        {
+            if (go == null) return;
+
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0)
+                SetLayerRecursively(go, uiLayer);
+        }
+
         public static void SyncSceneCanvases(Scene scene, int sceneIndex)
         {
             SyncSceneCanvases(scene, sceneIndex, true);

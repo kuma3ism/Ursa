@@ -57,7 +57,7 @@ namespace Ursa
     {
         /// <summary>
         /// 環境に応じて UrsaDialogManager が方式を選択します。
-        /// Built-in RP → LegacyGrabPass、URP → ScreenshotBlur（BarrierStyle 側）へ自動降格。
+        /// Built-in RP → LegacyGrabPass、URP → RendererFeature。
         /// </summary>
         Auto,
 

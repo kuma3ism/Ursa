@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
+using Ursa.Dialogs.Rendering;
 using Ursa.UI;
 
 namespace Ursa.Dialogs
@@ -53,6 +54,7 @@ namespace Ursa.Dialogs
         private RenderTexture _screenshotBlurTexture;
         private Material   _realtimeBlurMaterial;
         private Coroutine _screenshotBlurCoroutine;
+        private bool _hasWarnedRendererFeatureMissing;
 
         /// <summary>
         /// 全ダイアログのデフォルトとなるバリアスタイル。
@@ -128,6 +130,7 @@ namespace Ursa.Dialogs
 
                 var parent = GetParent(parameter?.Placement ?? DialogPlacement.Scene);
                 var go     = UnityEngine.Object.Instantiate(prefab, parent);
+                UrsaUICanvasUtility.ConfigureManagedObject(go);
 
                 var dialog = go.GetComponent<TDialog>();
                 if (dialog == null)
@@ -370,6 +373,7 @@ namespace Ursa.Dialogs
 
             var go = new GameObject("[UrsaBarrier]");
             go.transform.SetParent(parent, false);
+            UrsaUICanvasUtility.ConfigureManagedObject(go);
 
             var rect      = go.AddComponent<RectTransform>();
             rect.anchorMin = Vector2.zero;
@@ -406,6 +410,7 @@ namespace Ursa.Dialogs
             _barrierButton.onClick.AddListener(OnBarrierTapped);
 
             _barrierObject = go;
+            UrsaUICanvasUtility.ConfigureManagedObject(_barrierObject);
         }
 
         // ---- RealtimeBlur 管理 ─────────────────────────────────
@@ -421,6 +426,12 @@ namespace Ursa.Dialogs
             }
 
             ReleaseScreenshotBlurTexture();
+
+            if (mode == Ursa.RealtimeBlurMode.RendererFeature && !UrsaDialogBlurRendererFeature.WasEnqueuedRecently && !_hasWarnedRendererFeatureMissing)
+            {
+                _hasWarnedRendererFeatureMissing = true;
+                _logger.LogWarning("[Ursa] RealtimeBlurMode.RendererFeature is selected, but UrsaDialogBlurRendererFeature has not been enqueued recently. Add UrsaDialogBlurRendererFeature to the active Universal Renderer Data.");
+            }
 
             var realtimeMatSource = GetRealtimeBlurMaterial(mode);
             if (realtimeMatSource != null)
@@ -462,7 +473,7 @@ namespace Ursa.Dialogs
                 return RealtimeBlurMode;
 
             if (UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null)
-                return Ursa.RealtimeBlurMode.ScreenshotFallback;
+                return Ursa.RealtimeBlurMode.RendererFeature;
 
             return Ursa.RealtimeBlurMode.LegacyGrabPass;
         }
@@ -656,12 +667,16 @@ namespace Ursa.Dialogs
         private RectTransform GetOrCreateDdolRoot()
         {
             if (_ddolCanvas != null && _ddolCanvas.gameObject != null)
+            {
+                UrsaUICamera.AttachToActiveBaseCameras();
                 return (RectTransform)_ddolCanvas.transform;
+            }
 
             var go = new GameObject("[UrsaDialogRoot]");
             UnityEngine.Object.DontDestroyOnLoad(go);
             _ddolCanvas = go.AddComponent<Canvas>();
             UrsaUICanvasUtility.ConfigureDialogCanvas(_ddolCanvas);
+            UrsaUICamera.AttachToActiveBaseCameras();
             go.AddComponent<GraphicRaycaster>(); // Barrier のタップ検知に必要
 
             _logger.Log("<color=cyan>[Ursa]</color> Dialog root canvas created (DontDestroyOnLoad).");
