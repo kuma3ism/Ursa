@@ -37,6 +37,8 @@ namespace Ursa.Dialogs.Rendering
             var cameraType = renderingData.cameraData.cameraType;
             if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
                 return;
+            if (renderingData.cameraData.renderType != CameraRenderType.Base)
+                return;
 
             if (_pass == null)
                 Create();
@@ -95,6 +97,8 @@ namespace Ursa.Dialogs.Rendering
 
                 if (cameraData.cameraType != CameraType.Game && cameraData.cameraType != CameraType.SceneView)
                     return;
+                if (cameraData.renderType != CameraRenderType.Base)
+                    return;
 
                 var descriptor = cameraData.cameraTargetDescriptor;
                 descriptor.depthBufferBits = 0;
@@ -104,12 +108,18 @@ namespace Ursa.Dialogs.Rendering
                 descriptor.width = Mathf.Max(1, descriptor.width / downsample);
                 descriptor.height = Mathf.Max(1, descriptor.height / downsample);
 
-                var destination = UniversalRenderer.CreateRenderGraphTexture(
-                    renderGraph,
+                RenderingUtils.ReAllocateHandleIfNeeded(
+                    ref _copyTexture,
                     descriptor,
-                    _settings.TextureName,
-                    false,
-                    _settings.FilterMode);
+                    _settings.FilterMode,
+                    TextureWrapMode.Clamp,
+                    name: _settings.TextureName);
+
+                Shader.SetGlobalTexture(_textureId, _copyTexture);
+
+                var destination = renderGraph.ImportTexture(_copyTexture);
+                if (!resourceData.activeColorTexture.IsValid() || !destination.IsValid())
+                    return;
 
                 using var builder = renderGraph.AddBlitPass(
                     resourceData.activeColorTexture,
@@ -118,7 +128,7 @@ namespace Ursa.Dialogs.Rendering
                     Vector2.zero,
                     returnBuilder: true,
                     passName: "Ursa Dialog Blur Copy");
-                builder.SetGlobalTextureAfterPass(destination, _textureId);
+                builder.AllowPassCulling(false);
             }
 
             [Obsolete("Compatibility-mode path for URP versions that do not execute RenderGraph passes.")]
@@ -127,6 +137,8 @@ namespace Ursa.Dialogs.Rendering
 #pragma warning disable 0618
                 var cameraType = renderingData.cameraData.cameraType;
                 if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
+                    return;
+                if (renderingData.cameraData.renderType != CameraRenderType.Base)
                     return;
 
                 var cmd = CommandBufferPool.Get();
