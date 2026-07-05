@@ -1,7 +1,7 @@
 {
     "name": "Ursa.Runtime",
     "rootNamespace": "Ursa",
-    "references": ["Unity.InputSystem", "Unity.RenderPipelines.Core.Runtime"],
+    "references": ["Unity.InputSystem"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

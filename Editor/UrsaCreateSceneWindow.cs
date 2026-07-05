@@ -2,7 +2,9 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+#if URSA_HAS_CORE_RP
 using UnityEngine.Rendering;
+#endif
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -154,12 +156,16 @@ namespace Ursa.Editor
             lightGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             SceneManager.MoveGameObjectToScene(lightGO, newScene);
 
+#if URSA_HAS_CORE_RP
+            // Volume は Core RP Library (URP/HDRP) が入っている環境でのみ作成する。
+            // Built-in RP専用プロジェクトでは Core RP Library が存在しないため、このブロック自体をコンパイル対象から外す。
             var volumeGO = new GameObject("Global Volume");
             var volume = volumeGO.AddComponent<Volume>();
             volume.isGlobal = true;
             var defaultProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/Settings/DefaultVolumeProfile.asset");
             if (defaultProfile != null) volume.sharedProfile = defaultProfile;
             SceneManager.MoveGameObjectToScene(volumeGO, newScene);
+#endif
 
             var canvasGO = new GameObject("UiCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(global::Ursa.UI.UrsaUICanvas));
             canvasGO.transform.SetParent(rootGO.transform, false);

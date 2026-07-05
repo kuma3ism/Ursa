@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using Ursa.Scenes;
 using Ursa.Transitions;
@@ -417,11 +416,38 @@ namespace Ursa
                 foreach (var light in lights)
                     SetEnabled(light, visible);
 
-                var volumes = go.GetComponentsInChildren<Volume>(true);
-                foreach (var volume in volumes)
-                    SetEnabled(volume, visible);
+                // Volume (URP/HDRP の Post-processing Volume) はUnity.RenderPipelines.Core.Runtime に
+                // 定義されているため、Built-in RP専用プロジェクト（Core RP Library未インストール）でも
+                // コンパイルが通るようリフレクションで解決する。
+                var volumeType = GetVolumeType();
+                if (volumeType != null)
+                {
+                    var volumes = go.GetComponentsInChildren(volumeType, true);
+                    foreach (var volumeObj in volumes)
+                    {
+                        if (volumeObj is Behaviour volumeBehaviour)
+                            SetEnabled(volumeBehaviour, visible);
+                    }
+                }
             }
             _rootGameObjectBuffer.Clear();
+        }
+
+        private static bool _volumeTypeResolved;
+        private static Type _volumeType;
+
+        /// <summary>
+        /// UnityEngine.Rendering.Volume 型を、アセンブリへの直接参照無しで解決します。
+        /// Core RP Library が存在しない環境（Built-in RP専用）では null を返します。
+        /// </summary>
+        private static Type GetVolumeType()
+        {
+            if (_volumeTypeResolved)
+                return _volumeType;
+
+            _volumeTypeResolved = true;
+            _volumeType = Type.GetType("UnityEngine.Rendering.Volume, Unity.RenderPipelines.Core.Runtime");
+            return _volumeType;
         }
 
         private void AttachUiCameraToTopmostVisibleScene(Scene transientScene, UrsaScenePresentation transientPresentation)
