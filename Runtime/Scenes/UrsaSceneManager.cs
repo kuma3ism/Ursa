@@ -389,6 +389,8 @@ namespace Ursa
                 UrsaUICanvasUtility.SyncSceneCanvases(transientScene, _history.Count, true);
                 SetSceneVisualsVisible(transientScene, true);
             }
+
+            AttachUiCameraToTopmostVisibleScene(transientScene, transientPresentation);
         }
 
         private void SetSceneVisualsVisible(Scene scene, bool visible)
@@ -401,11 +403,7 @@ namespace Ursa
             {
                 var cameras = go.GetComponentsInChildren<Camera>(true);
                 foreach (var camera in cameras)
-                {
                     SetEnabled(camera, visible);
-                    if (visible && camera.enabled)
-                        UrsaUICamera.AttachToBaseCamera(camera);
-                }
 
                 var listeners = go.GetComponentsInChildren<AudioListener>(true);
                 foreach (var listener in listeners)
@@ -424,6 +422,61 @@ namespace Ursa
                     SetEnabled(volume, visible);
             }
             _rootGameObjectBuffer.Clear();
+        }
+
+        private void AttachUiCameraToTopmostVisibleScene(Scene transientScene, UrsaScenePresentation transientPresentation)
+        {
+            if (transientScene.IsValid() && transientScene.isLoaded)
+            {
+                var camera = FindEnabledCamera(transientScene);
+                if (camera != null)
+                {
+                    UrsaUICamera.AttachToBaseCameraExclusive(camera);
+                    return;
+                }
+            }
+
+            bool coveredByFullscreen = transientScene.IsValid() && transientPresentation == UrsaScenePresentation.Fullscreen;
+            for (int i = _history.Count - 1; i >= 0; i--)
+            {
+                var entry = _history[i];
+                bool visible = !coveredByFullscreen;
+                if (visible)
+                {
+                    var camera = FindEnabledCamera(entry.Scene);
+                    if (camera != null)
+                    {
+                        UrsaUICamera.AttachToBaseCameraExclusive(camera);
+                        return;
+                    }
+                }
+
+                if (entry.Presentation == UrsaScenePresentation.Fullscreen)
+                    coveredByFullscreen = true;
+            }
+        }
+
+        private Camera FindEnabledCamera(Scene scene)
+        {
+            if (!scene.IsValid() || !scene.isLoaded)
+                return null;
+
+            Camera bestCamera = null;
+            scene.GetRootGameObjects(_rootGameObjectBuffer);
+            foreach (var go in _rootGameObjectBuffer)
+            {
+                var cameras = go.GetComponentsInChildren<Camera>(true);
+                foreach (var camera in cameras)
+                {
+                    if (camera == null || !camera.enabled)
+                        continue;
+
+                    if (bestCamera == null || camera.depth > bestCamera.depth)
+                        bestCamera = camera;
+                }
+            }
+            _rootGameObjectBuffer.Clear();
+            return bestCamera;
         }
 
         private void SetEnabled(Behaviour component, bool visible)

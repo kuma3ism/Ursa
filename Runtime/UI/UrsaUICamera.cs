@@ -50,12 +50,25 @@ namespace Ursa.UI
 
         public static void AttachToBaseCamera(Camera baseCamera)
         {
+            AttachToBaseCamera(baseCamera, false);
+        }
+
+        public static void AttachToBaseCameraExclusive(Camera baseCamera)
+        {
+            AttachToBaseCamera(baseCamera, true);
+        }
+
+        private static void AttachToBaseCamera(Camera baseCamera, bool exclusive)
+        {
             if (baseCamera == null)
                 return;
 
             var uiCamera = Ensure();
             if (baseCamera == uiCamera)
                 return;
+
+            if (exclusive)
+                DetachFromAllBaseCameras(uiCamera);
 
             var baseData = GetOrAddUniversalCameraData(baseCamera);
             if (baseData == null)
@@ -73,12 +86,28 @@ namespace Ursa.UI
 
         public static void AttachToActiveBaseCameras()
         {
+            AttachToBestActiveBaseCamera();
+        }
+
+        public static void AttachToBestActiveBaseCamera()
+        {
             var cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            Camera bestCamera = null;
             foreach (var camera in cameras)
             {
-                if (camera != null && camera.enabled)
-                    AttachToBaseCamera(camera);
+                if (camera == null || !camera.enabled || camera == _camera)
+                    continue;
+
+                var cameraData = GetUniversalCameraData(camera);
+                if (cameraData != null && !HasEnumPropertyValue(cameraData, "renderType", "Base"))
+                    continue;
+
+                if (bestCamera == null || camera.depth > bestCamera.depth)
+                    bestCamera = camera;
             }
+
+            if (bestCamera != null)
+                AttachToBaseCameraExclusive(bestCamera);
         }
 
         private static void Configure(Camera camera)
@@ -116,6 +145,12 @@ namespace Ursa.UI
             if (cameraData == null)
                 cameraData = camera.gameObject.AddComponent(cameraDataType);
             return cameraData;
+        }
+
+        private static Component GetUniversalCameraData(Camera camera)
+        {
+            var cameraDataType = GetUniversalCameraDataType();
+            return cameraDataType == null ? null : camera.GetComponent(cameraDataType);
         }
 
         private static Type GetUniversalCameraDataType()
@@ -177,6 +212,32 @@ namespace Ursa.UI
 
             if (!cameraStack.Contains(uiCamera))
                 cameraStack.Add(uiCamera);
+        }
+
+        private static void DetachFromAllBaseCameras(Camera uiCamera)
+        {
+            var cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            foreach (var camera in cameras)
+            {
+                if (camera == null || camera == uiCamera)
+                    continue;
+
+                var cameraData = GetUniversalCameraData(camera);
+                RemoveCameraFromStack(cameraData, uiCamera);
+            }
+        }
+
+        private static void RemoveCameraFromStack(object baseCameraData, Camera uiCamera)
+        {
+            if (baseCameraData == null)
+                return;
+
+            var property = baseCameraData.GetType().GetProperty("cameraStack");
+            if (property?.GetValue(baseCameraData) is not IList cameraStack)
+                return;
+
+            if (cameraStack.Contains(uiCamera))
+                cameraStack.Remove(uiCamera);
         }
     }
 }
