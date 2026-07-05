@@ -23,6 +23,11 @@ namespace Ursa.UI
             Configure(canvas, UrsaUIRenderOrder.Transition);
         }
 
+        public static void ConfigureTapEffectCanvas(Canvas canvas)
+        {
+            Configure(canvas, UrsaUIRenderOrder.TapEffect);
+        }
+
         public static void ConfigureManagedObject(GameObject go)
         {
             if (go == null) return;
@@ -61,6 +66,11 @@ namespace Ursa.UI
                     if (canvas.gameObject.name == "UiCanvas")
                     {
                         ConfigureSceneCanvas(canvas, sceneIndex);
+                        canvas.enabled = visible;
+                    }
+                    else if (canvas.gameObject.name == "TapEffectCanvas" || canvas.gameObject.name == "[Ursa] TapEffectCanvas")
+                    {
+                        ConfigureTapEffectCanvas(canvas);
                         canvas.enabled = visible;
                     }
                 }
