@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using Ursa;
+using Ursa.UI;
 
 namespace Ursa.Transitions
 {
@@ -44,8 +45,7 @@ namespace Ursa.Transitions
             DontDestroyOnLoad(gameObject);
 
             var canvas = GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            UrsaUICanvasUtility.ConfigureTransitionCanvas(canvas);
 
             _canvasGroup = GetComponent<CanvasGroup>();
             _canvasGroup.alpha = 0f;

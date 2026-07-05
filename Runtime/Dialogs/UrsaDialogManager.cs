@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
+using Ursa.UI;
 
 namespace Ursa.Dialogs
 {
@@ -659,9 +660,8 @@ namespace Ursa.Dialogs
 
             var go = new GameObject("[UrsaDialogRoot]");
             UnityEngine.Object.DontDestroyOnLoad(go);
-            _ddolCanvas             = go.AddComponent<Canvas>();
-            _ddolCanvas.renderMode  = RenderMode.ScreenSpaceOverlay;
-            _ddolCanvas.sortingOrder = 100;
+            _ddolCanvas = go.AddComponent<Canvas>();
+            UrsaUICanvasUtility.ConfigureDialogCanvas(_ddolCanvas);
             go.AddComponent<GraphicRaycaster>(); // Barrier のタップ検知に必要
 
             _logger.Log("<color=cyan>[Ursa]</color> Dialog root canvas created (DontDestroyOnLoad).");

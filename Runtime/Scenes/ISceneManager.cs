@@ -49,12 +49,12 @@ namespace Ursa
         /// <summary>
         /// 既にロード済みのシーンのインスタンスを、現在のシーンの上に重ねて履歴に追加します。
         /// </summary>
-        Task PushInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Fade);
+        Task PushInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Fade, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen);
 
         /// <summary>
         /// 既にロード済みのシーンのインスタンスを、現在の最前面のシーンと入れ替えて履歴を更新します。
         /// </summary>
-        Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Fade);
+        Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Fade, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen);
 
         /// <summary>
         /// 現在の履歴スタックを古い順（インデックス0が最も古い）で返します。

@@ -61,7 +61,7 @@ namespace Ursa
         internal async Task OpenAsync(T parameter)
         {
             CurrentParam = parameter;
-            await _sceneManager.PushInstanceAsync(this.gameObject.scene);
+            await _sceneManager.PushInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter));
             await OnInitializeAsync(parameter);
         }
 
@@ -72,7 +72,7 @@ namespace Ursa
         public async Task ReplaceAsync(T parameter)
         {
             CurrentParam = parameter;
-            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene);
+            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter));
             await OnInitializeAsync(parameter);
         }
 
@@ -91,6 +91,11 @@ namespace Ursa
         {
             var unloader = this.CurrentParam as ISceneResourceUnloader;
             unloader?.UnloadResources();
+        }
+
+        private static UrsaScenePresentation GetPresentation(ISceneParameter parameter)
+        {
+            return parameter?.Presentation ?? UrsaScenePresentation.Fullscreen;
         }
 
         /// <summary>

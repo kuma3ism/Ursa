@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 using Ursa.Transitions;
+using Ursa.UI;
 
 namespace Ursa.Editor
 {
@@ -43,8 +44,9 @@ namespace Ursa.Editor
         {
             var go = new GameObject("FadeTransitionEffect");
             var canvas = go.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.planeDistance = 1f;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             var rt = go.GetComponent<RectTransform>();
@@ -158,8 +160,9 @@ namespace Ursa.Editor
             // ---- Prefab 構築 ----
             var go = new GameObject(prefabName);
             var canvas = go.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.planeDistance = 1f;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             go.GetComponent<RectTransform>().localScale = Vector3.one;
@@ -223,8 +226,9 @@ namespace Ursa.Editor
             // Prefab の GameObject 構築
             var go = new GameObject(name);
             var canvas = go.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.planeDistance = 1f;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             go.GetComponent<RectTransform>().localScale = Vector3.one;

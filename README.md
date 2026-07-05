@@ -146,15 +146,18 @@ public class MySceneParameter : ISceneParameter
 }
 ```
 
-`IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
-バックキーで戻れないオーバーレイ表示などに使います。
+`Presentation` を `Overlay` にすると、背面シーンを表示したまま重ねられます。
+通常の画面遷移はデフォルトの `Fullscreen` を使います。
 
 ```csharp
 public class OverlayParameter : ISceneParameter
 {
-    bool ISceneParameter.IsHistory => false; // 履歴に残さない
+    UrsaScenePresentation ISceneParameter.Presentation => UrsaScenePresentation.Overlay;
 }
 ```
+
+`IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
+通常は `Overlay` 表示でも履歴に積む方が、`CloseAsync()` や戻る操作と相性がよいです。
 
 ### 2. シーンクラスの定義
 

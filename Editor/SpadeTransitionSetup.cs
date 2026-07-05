@@ -3,6 +3,7 @@ using UnityEditor.Animations;
 using UnityEngine;
 using Ursa;
 using Ursa.Transitions;
+using Ursa.UI;
 
 namespace Ursa.Editor
 {
@@ -118,8 +119,9 @@ namespace Ursa.Editor
             var go = new GameObject(PrefabName);
 
             var canvas = go.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.planeDistance = 1f;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             go.GetComponent<RectTransform>().localScale = Vector3.one;

@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using Ursa.Scenes;
 using Ursa.Transitions;
+using Ursa.UI;
 
 namespace Ursa
 {
@@ -17,6 +19,7 @@ namespace Ursa
         public string SceneName { get; set; }
         public Type SceneType { get; set; }
         public Scene Scene { get; set; }
+        public UrsaScenePresentation Presentation { get; set; }
     }
 
     /// <summary>
@@ -45,6 +48,7 @@ namespace Ursa
         private readonly List<GameObject> _rootGameObjectBuffer = new List<GameObject>();
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
         private readonly List<ISceneManagerReceiver> _managerReceiverBuffer = new List<ISceneManagerReceiver>();
+        private readonly Dictionary<Component, bool> _hiddenComponentStates = new Dictionary<Component, bool>();
 
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
@@ -73,6 +77,9 @@ namespace Ursa
                     if (prefab != null)
                     {
                         manualEffect = UnityEngine.Object.Instantiate(prefab);
+                        var effectCanvases = manualEffect.GetComponentsInChildren<Canvas>(true);
+                        foreach (var effectCanvas in effectCanvases)
+                            UrsaUICanvasUtility.ConfigureTransitionCanvas(effectCanvas);
                         shouldDestroyEffect = true;
                     }
                 }
@@ -197,10 +204,11 @@ namespace Ursa
 
                 // 3. 新しいシーンを登録する（IsHistory に関わらずReplaceは必ず履歴に入る）
                 if (newlyLoadedScene.IsValid())
-                    PushHistory(newlyLoadedScene, typeof(TScene));
+                    PushHistory(newlyLoadedScene, typeof(TScene), GetPresentation(parameter));
 
                 if (parameter != null) await InjectParameterToScene(newlyLoadedScene, parameter);
                 InjectSceneManager(newlyLoadedScene);
+                SyncSceneCanvases();
             }, transitionName);
         }
 
@@ -224,6 +232,7 @@ namespace Ursa
                     _logger.Log($"<color=cyan>[Ursa]</color> Pop: {entry.Scene.name}");
                     await _sceneLoader.UnloadSceneAsync(entry.Scene);
                 }
+                SyncSceneCanvases();
                 NotifyBackToScene();
             }, transitionName);
         }
@@ -283,6 +292,7 @@ namespace Ursa
                         await _sceneLoader.UnloadSceneAsync(entry.Scene);
                     }
                 }
+                SyncSceneCanvases();
                 NotifyBackToScene();
             }, transitionName);
         }
@@ -304,16 +314,29 @@ namespace Ursa
                 // IsHistory が false の場合は履歴に積まない
                 bool addToHistory = parameter == null || parameter.IsHistory;
                 if (addToHistory)
-                    PushHistory(newlyLoadedScene, sceneType);
+                    PushHistory(newlyLoadedScene, sceneType, GetPresentation(parameter));
 
                 if (parameter != null)
                     await InjectParameterToScene(newlyLoadedScene, parameter);
 
                 InjectSceneManager(newlyLoadedScene);
+                if (addToHistory)
+                {
+                    SyncSceneCanvases();
+                }
+                else
+                {
+                    SyncSceneCanvasesForTransientScene(newlyLoadedScene, GetPresentation(parameter));
+                }
             }, transitionName);
         }
 
         private void PushHistory(Scene scene, Type sceneType)
+        {
+            PushHistory(scene, sceneType, UrsaScenePresentation.Fullscreen);
+        }
+
+        private void PushHistory(Scene scene, Type sceneType, UrsaScenePresentation presentation)
         {
             _history.Add(new SceneHistoryEntry
             {
@@ -321,6 +344,7 @@ namespace Ursa
                 SceneName = scene.name,
                 SceneType = sceneType,
                 Scene = scene,
+                Presentation = presentation,
             });
             // インデックスを振り直す
             for (int i = 0; i < _history.Count; i++)
@@ -333,7 +357,121 @@ namespace Ursa
 
             Scene active = SceneManager.GetActiveScene();
             PushHistory(active, null);
+            SyncSceneCanvases();
             _logger.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
+        }
+
+        private void SyncSceneCanvases()
+        {
+            SyncSceneCanvases(default, UrsaScenePresentation.Overlay);
+        }
+
+        private void SyncSceneCanvasesForTransientScene(Scene transientScene, UrsaScenePresentation presentation)
+        {
+            SyncSceneCanvases(transientScene, presentation);
+        }
+
+        private void SyncSceneCanvases(Scene transientScene, UrsaScenePresentation transientPresentation)
+        {
+            bool coveredByFullscreen = transientScene.IsValid() && transientPresentation == UrsaScenePresentation.Fullscreen;
+            for (int i = _history.Count - 1; i >= 0; i--)
+            {
+                var entry = _history[i];
+                bool visible = !coveredByFullscreen;
+                UrsaUICanvasUtility.SyncSceneCanvases(entry.Scene, i, visible);
+                SetSceneVisualsVisible(entry.Scene, visible);
+                if (entry.Presentation == UrsaScenePresentation.Fullscreen)
+                    coveredByFullscreen = true;
+            }
+
+            if (transientScene.IsValid() && transientScene.isLoaded)
+            {
+                UrsaUICanvasUtility.SyncSceneCanvases(transientScene, _history.Count, true);
+                SetSceneVisualsVisible(transientScene, true);
+            }
+        }
+
+        private void SetSceneVisualsVisible(Scene scene, bool visible)
+        {
+            if (!scene.IsValid() || !scene.isLoaded)
+                return;
+
+            scene.GetRootGameObjects(_rootGameObjectBuffer);
+            foreach (var go in _rootGameObjectBuffer)
+            {
+                var cameras = go.GetComponentsInChildren<Camera>(true);
+                foreach (var camera in cameras)
+                {
+                    SetEnabled(camera, visible);
+                    if (visible && camera.enabled)
+                        UrsaUICamera.AttachToBaseCamera(camera);
+                }
+
+                var listeners = go.GetComponentsInChildren<AudioListener>(true);
+                foreach (var listener in listeners)
+                    SetEnabled(listener, visible);
+
+                var renderers = go.GetComponentsInChildren<Renderer>(true);
+                foreach (var renderer in renderers)
+                    SetEnabled(renderer, visible);
+
+                var lights = go.GetComponentsInChildren<Light>(true);
+                foreach (var light in lights)
+                    SetEnabled(light, visible);
+
+                var volumes = go.GetComponentsInChildren<Volume>(true);
+                foreach (var volume in volumes)
+                    SetEnabled(volume, visible);
+            }
+            _rootGameObjectBuffer.Clear();
+        }
+
+        private void SetEnabled(Behaviour component, bool visible)
+        {
+            if (component == null) return;
+            if (visible)
+                RestoreEnabled(component);
+            else
+                HideEnabled(component, component.enabled, value => component.enabled = value);
+        }
+
+        private void SetEnabled(Renderer component, bool visible)
+        {
+            if (component == null) return;
+            if (visible)
+                RestoreEnabled(component);
+            else
+                HideEnabled(component, component.enabled, value => component.enabled = value);
+        }
+
+        private void HideEnabled(Component component, bool enabled, Action<bool> setEnabled)
+        {
+            if (!_hiddenComponentStates.ContainsKey(component))
+                _hiddenComponentStates.Add(component, enabled);
+            setEnabled(false);
+        }
+
+        private void RestoreEnabled(Behaviour component)
+        {
+            if (_hiddenComponentStates.TryGetValue(component, out bool enabled))
+            {
+                component.enabled = enabled;
+                _hiddenComponentStates.Remove(component);
+            }
+        }
+
+        private void RestoreEnabled(Renderer component)
+        {
+            if (_hiddenComponentStates.TryGetValue(component, out bool enabled))
+            {
+                component.enabled = enabled;
+                _hiddenComponentStates.Remove(component);
+            }
+        }
+
+        private UrsaScenePresentation GetPresentation(ISceneParameter parameter)
+        {
+            return parameter?.Presentation ?? UrsaScenePresentation.Fullscreen;
         }
 
         private async Task InjectParameterToScene(Scene targetScene, ISceneParameter parameter)
@@ -439,6 +577,7 @@ namespace Ursa
                     return;
                 }
 
+                SyncSceneCanvasesForTransientScene(newlyLoadedScene, UrsaScenePresentation.Overlay);
                 newlyLoadedScene.GetRootGameObjects(_rootGameObjectBuffer);
                 foreach (var go in _rootGameObjectBuffer)
                 {
@@ -461,7 +600,7 @@ namespace Ursa
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
         /// </summary>
-        public Task PushInstanceAsync(Scene scene, string transitionName = TransitionType.Fade)
+        public Task PushInstanceAsync(Scene scene, string transitionName = TransitionType.Fade, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen)
         {
             if (_isTransitioning)
             {
@@ -474,15 +613,16 @@ namespace Ursa
 
             if (_history.Count == 0) RegisterInitialScene();
             NotifyPauseScene();
-            PushHistory(scene, null);
+            PushHistory(scene, null, presentation);
             InjectSceneManager(scene);
+            SyncSceneCanvases();
             return Task.CompletedTask;
         }
 
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の最前面のシーンと入れ替え（Replace）て履歴を更新します。
         /// </summary>
-        public async Task ReplaceInstanceAsync(Scene scene, string transitionName = TransitionType.Fade)
+        public async Task ReplaceInstanceAsync(Scene scene, string transitionName = TransitionType.Fade, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen)
         {
             if (_isTransitioning)
             {
@@ -502,8 +642,9 @@ namespace Ursa
                         await _sceneLoader.UnloadSceneAsync(oldEntry.Scene);
                     }
                 }
-                PushHistory(scene, null);
+                PushHistory(scene, null, presentation);
                 InjectSceneManager(scene);
+                SyncSceneCanvases();
             }, transitionName);
         }
     }

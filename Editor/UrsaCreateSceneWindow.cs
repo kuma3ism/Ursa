@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Ursa.Editor
 {
@@ -159,6 +160,22 @@ namespace Ursa.Editor
             var defaultProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/Settings/DefaultVolumeProfile.asset");
             if (defaultProfile != null) volume.sharedProfile = defaultProfile;
             SceneManager.MoveGameObjectToScene(volumeGO, newScene);
+
+            var canvasGO = new GameObject("UiCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(global::Ursa.UI.UrsaUICanvas));
+            canvasGO.transform.SetParent(rootGO.transform, false);
+            var canvas = canvasGO.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = cameraGO.GetComponent<Camera>();
+            canvas.planeDistance = 1f;
+            var scaler = canvasGO.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+            var rect = canvasGO.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
 
             EditorSceneManager.SaveScene(newScene, scenePath);
             EditorSceneManager.CloseScene(newScene, true);

@@ -96,11 +96,14 @@ namespace Ursa.Editor
         /// </summary>
         private static GameObject CreateCanvas()
         {
-            var canvasGo = new GameObject("Canvas");
+            var canvasGo = new GameObject("UiCanvas");
             var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = Camera.main;
+            canvas.planeDistance = 1f;
             canvasGo.AddComponent<CanvasScaler>();
             canvasGo.AddComponent<GraphicRaycaster>();
+            canvasGo.AddComponent<global::Ursa.UI.UrsaUICanvas>();
             Undo.RegisterCreatedObjectUndo(canvasGo, "Create Canvas");
             return canvasGo;
         }

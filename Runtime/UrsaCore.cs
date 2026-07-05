@@ -5,6 +5,12 @@ using Ursa.UI;
 
 namespace Ursa
 {
+    public enum UrsaScenePresentation
+    {
+        Fullscreen,
+        Overlay
+    }
+
     /// <summary>
     /// シーン遷移時に渡すパラメーターのベースインターフェース
     /// </summary>
@@ -15,6 +21,11 @@ namespace Ursa
         /// デフォルトは true。false にすると、シーンは表示されるが履歴には残りません。
         /// </summary>
         bool IsHistory => true;
+
+        /// <summary>
+        /// このシーンを前面に出した時、背面のシーンを隠すかどうか。
+        /// </summary>
+        UrsaScenePresentation Presentation => UrsaScenePresentation.Fullscreen;
     }
 
     /// <summary>
@@ -30,6 +41,9 @@ namespace Ursa
 
         /// <summary>シーンの型</summary>
         Type SceneType { get; }
+
+        /// <summary>表示方法</summary>
+        UrsaScenePresentation Presentation { get; }
     }
 
     /// <summary>
