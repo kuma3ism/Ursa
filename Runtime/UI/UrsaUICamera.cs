@@ -70,6 +70,8 @@ namespace Ursa.UI
 
             var cameraData = GetOrAddCameraData(camera);
             cameraData.renderType = CameraRenderType.Overlay;
+            cameraData.renderPostProcessing = false;
+            cameraData.antialiasing = AntialiasingMode.None;
             cameraData.requiresColorOption = CameraOverrideOption.Off;
             cameraData.requiresDepthOption = CameraOverrideOption.Off;
         }
