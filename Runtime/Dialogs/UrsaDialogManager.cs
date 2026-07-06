@@ -328,7 +328,7 @@ namespace Ursa.Dialogs
             // ダイアログの親が null の場合は DDOL Canvas を使う
             if (topParent == null)
             {
-                _logger.LogWarning("[Ursa] ダイアログの parent が null のため、DontDestroyOnLoad Canvas をバリアの親として使用します。");
+                _logger.LogWarning("[Ursa] Dialog barrier parent is missing. Falling back to the DontDestroyOnLoad dialog root.");
                 topParent = GetOrCreateDialogLayerRoots(GetOrCreateDdolRoot()).BarrierRoot;
             }
 
@@ -397,7 +397,7 @@ namespace Ursa.Dialogs
         {
             if (parent == null)
             {
-                _logger.LogWarning("[Ursa] CreateBarrier の parent が null のため、DontDestroyOnLoad Canvas を使用します。");
+                _logger.LogWarning("[Ursa] CreateBarrier received a null parent. Falling back to the DontDestroyOnLoad dialog root.");
                 parent = GetOrCreateDdolRoot();
             }
 
@@ -502,7 +502,7 @@ namespace Ursa.Dialogs
                 ReleaseRealtimeBlurMaterial();
                 _barrierImage.material = null;
                 _barrierImage.color = DimmedColor;
-                _logger.LogWarning("[Ursa] BarrierStyle.RealtimeBlur が指定されましたが BarrierMaterial / デフォルトマテリアルが見つからないため Dimmed でフォールバックします。");
+                _logger.LogWarning("[Ursa] BarrierStyle.RealtimeBlur was requested, but no realtime blur material was found. Falling back to Dimmed.");
             }
         }
 
@@ -655,7 +655,7 @@ namespace Ursa.Dialogs
             };
             var fallback = Resources.Load<Material>(resourcePath);
             if (fallback == null)
-                _logger.LogWarning($"[Ursa] BarrierMaterial も Resources/{resourcePath} も見つかりません。");
+                _logger.LogWarning($"[Ursa] No realtime blur material found. Assign BarrierMaterial or add Resources/{resourcePath}.");
             return fallback;
         }
 
@@ -668,7 +668,7 @@ namespace Ursa.Dialogs
             if (ScreenshotBlurMaterial != null) return ScreenshotBlurMaterial;
             var fallback = Resources.Load<Material>("Ursa/UrsaScreenshotBlur");
             if (fallback == null)
-                _logger.LogWarning("[Ursa] ScreenshotBlurMaterial も Resources/Ursa/UrsaScreenshotBlur も見つかりません。");
+                _logger.LogWarning("[Ursa] No screenshot blur material found. Assign ScreenshotBlurMaterial or add Resources/Ursa/UrsaScreenshotBlur.");
             return fallback;
         }
 

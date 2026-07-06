@@ -85,9 +85,9 @@ namespace Ursa
 
         /// <summary>
         /// リアルタイムブラーが使えない環境向けのフォールバック。
-        /// BarrierStyle.ScreenshotBlur と同じ処理を行うため、本来は BarrierStyle 側で
-        /// "RealtimeBlurWithFallback" のような値として表現する方が設計として自然。
-        /// TODO: BarrierStyle にフォールバック付きバリアントを追加し、このモードを廃止する。
+        /// BarrierStyle.ScreenshotBlur と同じ処理を行います。
+        /// RealtimeBlur を優先しつつ、RendererFeature などの実行条件を満たせない場合に
+        /// ScreenshotBlur へ切り替えたいときに使用します。
         /// </summary>
         ScreenshotFallback,
     }
