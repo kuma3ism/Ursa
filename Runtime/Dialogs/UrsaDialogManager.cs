@@ -19,6 +19,15 @@ namespace Ursa.Dialogs
         public IDialogReceiverBase ReceiverBase { get; set; }
         public bool   BarrierDismissible { get; set; }
         public BarrierStyle BarrierStyle { get; set; }
+        public RectTransform OwnerRoot { get; set; }
+        public RectTransform BarrierRoot { get; set; }
+        public RectTransform ContentRoot { get; set; }
+    }
+
+    internal sealed class DialogLayerRoots
+    {
+        public RectTransform OwnerRoot;
+        public RectTransform BarrierRoot;
     }
 
     /// <summary>
@@ -43,6 +52,7 @@ namespace Ursa.Dialogs
 
         private readonly RectTransform _defaultParent;
         private Canvas _ddolCanvas;
+        private readonly Dictionary<int, DialogLayerRoots> _layerRootsByOwner = new Dictionary<int, DialogLayerRoots>();
 
         // ---- Barrier 管理 ----
 
@@ -133,14 +143,16 @@ namespace Ursa.Dialogs
                 await Task.WhenAll(prefabTask, preloadTask);
                 var prefab = prefabTask.Result;
 
-                var parent = GetParent(parameter?.Placement ?? DialogPlacement.Scene);
-                var go     = UnityEngine.Object.Instantiate(prefab, parent);
+                var ownerRoot = GetOwnerRoot(parameter?.Placement ?? DialogPlacement.Scene);
+                var layerRoots = GetOrCreateDialogLayerRoots(ownerRoot);
+                var contentRoot = CreateDialogContentRoot(ownerRoot, name);
+                var go = UnityEngine.Object.Instantiate(prefab, contentRoot);
                 UrsaUICanvasUtility.ConfigureManagedObject(go);
 
                 var dialog = go.GetComponent<TDialog>();
                 if (dialog == null)
                 {
-                    UnityEngine.Object.Destroy(go);
+                    UnityEngine.Object.Destroy(contentRoot.gameObject);
                     throw new InvalidOperationException(
                         $"[Ursa] Component {typeof(TDialog).Name} が Prefab のルートに見つかりませんでした。");
                 }
@@ -157,6 +169,9 @@ namespace Ursa.Dialogs
                         ReceiverBase       = dialog,
                         BarrierDismissible = parameter?.BarrierDismissible ?? false,
                         BarrierStyle       = ResolveBarrierStyle(parameter?.BarrierStyle ?? BarrierStyle.Dimmed),
+                        OwnerRoot          = ownerRoot,
+                        BarrierRoot        = layerRoots.BarrierRoot,
+                        ContentRoot        = contentRoot,
                     });
                     RebuildIndices();
                     UpdateBarrier();
@@ -224,7 +239,9 @@ namespace Ursa.Dialogs
                 if (entry.ReceiverBase != null)
                     await entry.ReceiverBase.OnCloseAsync(reason);
 
-                if (entry.Instance != null)
+                if (entry.ContentRoot != null)
+                    UnityEngine.Object.Destroy(entry.ContentRoot.gameObject);
+                else if (entry.Instance != null)
                     UnityEngine.Object.Destroy(entry.Instance);
 
                 _loader.Unload(entry.DialogName);
@@ -251,7 +268,9 @@ namespace Ursa.Dialogs
                     if (entry.ReceiverBase != null)
                         await entry.ReceiverBase.OnCloseAsync(reason);
 
-                    if (entry.Instance != null)
+                    if (entry.ContentRoot != null)
+                        UnityEngine.Object.Destroy(entry.ContentRoot.gameObject);
+                    else if (entry.Instance != null)
                         UnityEngine.Object.Destroy(entry.Instance);
 
                     _loader.Unload(entry.DialogName);
@@ -303,20 +322,25 @@ namespace Ursa.Dialogs
 
             var top          = _history[_history.Count - 1];
             var topTransform = top.Instance.transform;
-            var topParent    = topTransform.parent as RectTransform;
+            var topParent    = top.BarrierRoot;
+            UpdateDialogLayerOrders();
 
             // ダイアログの親が null の場合は DDOL Canvas を使う
             if (topParent == null)
             {
                 _logger.LogWarning("[Ursa] ダイアログの parent が null のため、DontDestroyOnLoad Canvas をバリアの親として使用します。");
-                topParent = GetOrCreateDdolRoot();
+                topParent = GetOrCreateDialogLayerRoots(GetOrCreateDdolRoot()).BarrierRoot;
             }
 
             // 親が変わっていたら作り直す
             if (_barrierObject == null || _barrierObject.transform.parent != topParent)
             {
                 if (_barrierObject != null)
+                {
+                    ReleaseScreenshotBlurTexture();
+                    ReleaseRealtimeBlurMaterial();
                     UnityEngine.Object.Destroy(_barrierObject);
+                }
                 CreateBarrier(topParent);
             }
 
@@ -348,8 +372,8 @@ namespace Ursa.Dialogs
                     return; // 位置調整不要
             }
 
-            // 最前面ダイアログの直下に配置:
-            // Barrier を末尾 → top を末尾 とすると [..., Barrier, top] になる
+            // Barrier canvas と各 Dialog content canvas は sorting order で分離済み。
+            // 各 canvas 内では、現在対象を末尾にして最前面扱いにする。
             _barrierObject.transform.SetAsLastSibling();
             topTransform.SetAsLastSibling();
         }
@@ -705,11 +729,113 @@ namespace Ursa.Dialogs
 
         // ---- 内部ユーティリティ ────────────────────────────────
 
-        private RectTransform GetParent(DialogPlacement placement)
+        private RectTransform GetOwnerRoot(DialogPlacement placement)
         {
             if (placement == DialogPlacement.Scene && _defaultParent != null)
                 return _defaultParent;
             return GetOrCreateDdolRoot();
+        }
+
+        private DialogLayerRoots GetOrCreateDialogLayerRoots(RectTransform ownerRoot)
+        {
+            if (ownerRoot == null)
+                ownerRoot = GetOrCreateDdolRoot();
+
+            int key = ownerRoot.GetInstanceID();
+            if (_layerRootsByOwner.TryGetValue(key, out var roots) &&
+                roots.OwnerRoot != null &&
+                roots.BarrierRoot != null)
+            {
+                ConfigureDialogLayerCanvas(roots.BarrierRoot, true);
+                return roots;
+            }
+
+            roots = new DialogLayerRoots
+            {
+                OwnerRoot = ownerRoot,
+                BarrierRoot = GetOrCreateLayerRoot(ownerRoot, "[UrsaDialogBarrierCanvas]", true)
+            };
+
+            _layerRootsByOwner[key] = roots;
+            return roots;
+        }
+
+        private RectTransform CreateDialogContentRoot(RectTransform ownerRoot, string dialogName)
+        {
+            var go = new GameObject($"[UrsaDialogContentCanvas] {dialogName}");
+            go.transform.SetParent(ownerRoot, false);
+
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            go.AddComponent<Canvas>();
+            go.AddComponent<GraphicRaycaster>();
+            ConfigureDialogLayerCanvas(rect, false);
+            return rect;
+        }
+
+        private RectTransform GetOrCreateLayerRoot(RectTransform ownerRoot, string name, bool isBarrier)
+        {
+            var existing = ownerRoot.Find(name);
+            if (existing is RectTransform existingRect)
+            {
+                ConfigureDialogLayerCanvas(existingRect, isBarrier);
+                return existingRect;
+            }
+
+            var go = new GameObject(name);
+            go.transform.SetParent(ownerRoot, false);
+
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            go.AddComponent<Canvas>();
+            go.AddComponent<GraphicRaycaster>();
+            ConfigureDialogLayerCanvas(rect, isBarrier);
+            return rect;
+        }
+
+        private void ConfigureDialogLayerCanvas(RectTransform rect, bool isBarrier)
+        {
+            if (rect == null) return;
+            var canvas = rect.GetComponent<Canvas>();
+            if (canvas == null)
+                canvas = rect.gameObject.AddComponent<Canvas>();
+
+            if (isBarrier)
+                UrsaUICanvasUtility.ConfigureDialogBarrierCanvas(canvas);
+            else
+                UrsaUICanvasUtility.ConfigureDialogContentCanvas(canvas);
+
+            if (rect.GetComponent<GraphicRaycaster>() == null)
+                rect.gameObject.AddComponent<GraphicRaycaster>();
+        }
+
+        private void UpdateDialogLayerOrders()
+        {
+            for (int i = 0; i < _history.Count; i++)
+            {
+                var entry = _history[i];
+                ConfigureDialogLayerCanvas(entry.ContentRoot, false);
+                var contentCanvas = entry.ContentRoot != null ? entry.ContentRoot.GetComponent<Canvas>() : null;
+                if (contentCanvas != null)
+                    contentCanvas.sortingOrder = UrsaUIRenderOrder.DialogContent + i * 2;
+            }
+
+            if (_history.Count == 0)
+                return;
+
+            var top = _history[_history.Count - 1];
+            ConfigureDialogLayerCanvas(top.BarrierRoot, true);
+            var barrierCanvas = top.BarrierRoot != null ? top.BarrierRoot.GetComponent<Canvas>() : null;
+            if (barrierCanvas != null)
+                barrierCanvas.sortingOrder = UrsaUIRenderOrder.DialogContent + (_history.Count - 1) * 2 - 1;
         }
 
         private RectTransform GetOrCreateDdolRoot()

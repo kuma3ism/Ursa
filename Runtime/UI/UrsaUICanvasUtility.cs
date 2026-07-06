@@ -18,7 +18,21 @@ namespace Ursa.UI
 
         public static void ConfigureDialogCanvas(Canvas canvas)
         {
-            Configure(canvas, UrsaUIRenderOrder.Dialog);
+            ConfigureDialogContentCanvas(canvas);
+        }
+
+        public static void ConfigureDialogBarrierCanvas(Canvas canvas)
+        {
+            Configure(canvas, UrsaUIRenderOrder.DialogBarrier);
+            if (canvas != null)
+                canvas.overrideSorting = true;
+        }
+
+        public static void ConfigureDialogContentCanvas(Canvas canvas)
+        {
+            Configure(canvas, UrsaUIRenderOrder.DialogContent);
+            if (canvas != null)
+                canvas.overrideSorting = true;
         }
 
         public static void ConfigureTransitionCanvas(Canvas canvas)
