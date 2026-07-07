@@ -11,6 +11,7 @@ namespace Ursa.UI
     {
         private const string LegacyCameraName = "[Ursa] UICamera";
         private const string SceneCameraName = "[Ursa] Scene UICamera";
+        private const string DialogBackgroundCameraName = "[Ursa] Dialog Background UICamera";
         private const string DialogCameraName = "[Ursa] Dialog UICamera";
         private const string UniversalCameraDataTypeName =
             "UnityEngine.Rendering.Universal.UniversalAdditionalCameraData, Unity.RenderPipelines.Universal.Runtime";
@@ -22,6 +23,7 @@ namespace Ursa.UI
             "UnityEngine.Rendering.Universal.CameraOverrideOption, Unity.RenderPipelines.Universal.Runtime";
 
         private static Camera _sceneCamera;
+        private static Camera _dialogBackgroundCamera;
         private static Camera _dialogCamera;
         private static Type _universalCameraDataType;
         private static Type _cameraRenderTypeType;
@@ -83,12 +85,39 @@ namespace Ursa.UI
             return _dialogCamera;
         }
 
-        public static bool IsSceneUICamera(Camera camera)
+        public static Camera EnsureDialogBackgroundCamera()
+        {
+            if (_dialogBackgroundCamera != null && _dialogBackgroundCamera.gameObject != null)
+            {
+                Configure(_dialogBackgroundCamera);
+                return _dialogBackgroundCamera;
+            }
+
+            var existing = GameObject.Find(DialogBackgroundCameraName);
+            if (existing != null)
+                _dialogBackgroundCamera = existing.GetComponent<Camera>();
+
+            if (_dialogBackgroundCamera == null)
+            {
+                var go = existing != null ? existing : new GameObject(DialogBackgroundCameraName);
+                go.name = DialogBackgroundCameraName;
+                _dialogBackgroundCamera = go.AddComponent<Camera>();
+            }
+
+            UnityEngine.Object.DontDestroyOnLoad(_dialogBackgroundCamera.gameObject);
+            Configure(_dialogBackgroundCamera);
+            return _dialogBackgroundCamera;
+        }
+
+        public static bool IsBlurSourceUICamera(Camera camera)
         {
             var sceneCamera = _sceneCamera;
+            var dialogBackgroundCamera = _dialogBackgroundCamera;
             return camera != null &&
                    ((sceneCamera != null && camera == sceneCamera) ||
-                    string.Equals(camera.gameObject.name, SceneCameraName, StringComparison.Ordinal));
+                    (dialogBackgroundCamera != null && camera == dialogBackgroundCamera) ||
+                    string.Equals(camera.gameObject.name, SceneCameraName, StringComparison.Ordinal) ||
+                    string.Equals(camera.gameObject.name, DialogBackgroundCameraName, StringComparison.Ordinal));
         }
 
         public static void AttachToBaseCamera(Camera baseCamera)
@@ -107,13 +136,15 @@ namespace Ursa.UI
                 return;
 
             var sceneCamera = EnsureSceneCamera();
+            var dialogBackgroundCamera = EnsureDialogBackgroundCamera();
             var dialogCamera = EnsureDialogCamera();
-            if (baseCamera == sceneCamera || baseCamera == dialogCamera)
+            if (baseCamera == sceneCamera || baseCamera == dialogBackgroundCamera || baseCamera == dialogCamera)
                 return;
 
             if (exclusive)
             {
                 DetachFromAllBaseCameras(sceneCamera);
+                DetachFromAllBaseCameras(dialogBackgroundCamera);
                 DetachFromAllBaseCameras(dialogCamera);
             }
 
@@ -124,16 +155,20 @@ namespace Ursa.UI
                 return;
 
             var sceneData = GetOrAddUniversalCameraData(sceneCamera);
+            var dialogBackgroundData = GetOrAddUniversalCameraData(dialogBackgroundCamera);
             var dialogData = GetOrAddUniversalCameraData(dialogCamera);
-            if (sceneData == null || dialogData == null)
+            if (sceneData == null || dialogBackgroundData == null || dialogData == null)
                 return;
 
             SetEnumPropertyValue(sceneData, "renderType", "Overlay");
+            SetEnumPropertyValue(dialogBackgroundData, "renderType", "Overlay");
             SetEnumPropertyValue(dialogData, "renderType", "Overlay");
 
             RemoveCameraFromStack(baseData, sceneCamera);
+            RemoveCameraFromStack(baseData, dialogBackgroundCamera);
             RemoveCameraFromStack(baseData, dialogCamera);
             AddCameraToStack(baseData, sceneCamera);
+            AddCameraToStack(baseData, dialogBackgroundCamera);
             AddCameraToStack(baseData, dialogCamera);
         }
 
@@ -148,7 +183,7 @@ namespace Ursa.UI
             Camera bestCamera = null;
             foreach (var camera in cameras)
             {
-                if (camera == null || !camera.enabled || camera == _sceneCamera || camera == _dialogCamera)
+                if (camera == null || !camera.enabled || camera == _sceneCamera || camera == _dialogBackgroundCamera || camera == _dialogCamera)
                     continue;
 
                 var cameraData = GetUniversalCameraData(camera);

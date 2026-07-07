@@ -164,7 +164,7 @@ namespace Ursa.Dialogs.Rendering
 
         private static bool ShouldCopyCamera(Camera camera, CameraRenderType renderType)
         {
-            return renderType == CameraRenderType.Base || UrsaUICamera.IsSceneUICamera(camera);
+            return renderType == CameraRenderType.Base || UrsaUICamera.IsBlurSourceUICamera(camera);
         }
     }
 }

@@ -35,6 +35,13 @@ namespace Ursa.UI
                 canvas.overrideSorting = true;
         }
 
+        public static void ConfigureDialogBackgroundContentCanvas(Canvas canvas)
+        {
+            Configure(canvas, UrsaUIRenderOrder.DialogContent, UrsaUICamera.EnsureDialogBackgroundCamera());
+            if (canvas != null)
+                canvas.overrideSorting = true;
+        }
+
         public static void ConfigureTransitionCanvas(Canvas canvas)
         {
             Configure(canvas, UrsaUIRenderOrder.Transition);
@@ -67,6 +74,12 @@ namespace Ursa.UI
             var roots = scene.GetRootGameObjects();
             foreach (var root in roots)
             {
+                if (root.name == "[UrsaSceneDialogRoot]")
+                {
+                    SetSceneDialogRootVisible(root, visible);
+                    continue;
+                }
+
                 var markers = root.GetComponentsInChildren<UrsaUICanvas>(true);
                 foreach (var marker in markers)
                 {
@@ -100,6 +113,17 @@ namespace Ursa.UI
                     }
                 }
             }
+        }
+
+        private static void SetSceneDialogRootVisible(GameObject root, bool visible)
+        {
+            var canvases = root.GetComponentsInChildren<Canvas>(true);
+            foreach (var canvas in canvases)
+                canvas.enabled = visible;
+
+            var raycasters = root.GetComponentsInChildren<UnityEngine.UI.GraphicRaycaster>(true);
+            foreach (var raycaster in raycasters)
+                raycaster.enabled = visible;
         }
 
         private static void Configure(Canvas canvas, int sortingOrder)

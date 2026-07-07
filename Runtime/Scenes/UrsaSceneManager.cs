@@ -100,7 +100,10 @@ namespace Ursa
             try
             {
                 if (canvas != null) await canvas.PlayOutAsync();
+                float coveredStartTime = Time.realtimeSinceStartup;
                 await action();
+                if (canvas != null)
+                    await WaitForMinimumCoveredDurationAsync(canvas.MinimumCoveredDuration, coveredStartTime);
                 if (canvas != null) await canvas.PlayInAsync();
             }
             finally
@@ -111,6 +114,19 @@ namespace Ursa
                     UnityEngine.Object.Destroy(manualEffect.gameObject);
                 }
             }
+        }
+
+        private static async Task WaitForMinimumCoveredDurationAsync(float minimumCoveredDuration, float coveredStartTime)
+        {
+            if (minimumCoveredDuration <= 0f)
+                return;
+
+            float elapsed = Time.realtimeSinceStartup - coveredStartTime;
+            float remaining = minimumCoveredDuration - elapsed;
+            if (remaining <= 0f)
+                return;
+
+            await Task.Delay(TimeSpan.FromSeconds(remaining));
         }
 
         // 現在最前面のシーンから TransitionController を取得（なければ null）
@@ -355,9 +371,32 @@ namespace Ursa
             if (_history.Count > 0) return;
 
             Scene active = SceneManager.GetActiveScene();
-            PushHistory(active, null);
+            PushHistory(active, ResolveSceneType(active));
             SyncSceneCanvases();
             _logger.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
+        }
+
+        private Type ResolveSceneType(Scene scene)
+        {
+            if (!scene.IsValid() || !scene.isLoaded)
+                return null;
+
+            scene.GetRootGameObjects(_rootGameObjectBuffer);
+            foreach (var go in _rootGameObjectBuffer)
+            {
+                var behaviours = go.GetComponentsInChildren<MonoBehaviour>(true);
+                foreach (var behaviour in behaviours)
+                {
+                    if (behaviour is ISceneReceiver)
+                    {
+                        _rootGameObjectBuffer.Clear();
+                        return behaviour.GetType();
+                    }
+                }
+            }
+
+            _rootGameObjectBuffer.Clear();
+            return null;
         }
 
         private void SyncSceneCanvases()
@@ -692,7 +731,7 @@ namespace Ursa
 
             if (_history.Count == 0) RegisterInitialScene();
             NotifyPauseScene();
-            PushHistory(scene, null, presentation);
+            PushHistory(scene, ResolveSceneType(scene), presentation);
             InjectSceneManager(scene);
             SyncSceneCanvases();
             return Task.CompletedTask;
@@ -721,7 +760,7 @@ namespace Ursa
                         await _sceneLoader.UnloadSceneAsync(oldEntry.Scene);
                     }
                 }
-                PushHistory(scene, null, presentation);
+                PushHistory(scene, ResolveSceneType(scene), presentation);
                 InjectSceneManager(scene);
                 SyncSceneCanvases();
             }, transitionName);

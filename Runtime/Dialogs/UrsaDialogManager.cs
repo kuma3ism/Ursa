@@ -793,7 +793,7 @@ namespace Ursa.Dialogs
                 roots.OwnerRoot != null &&
                 roots.BarrierRoot != null)
             {
-                ConfigureDialogLayerCanvas(roots.BarrierRoot, true);
+                ConfigureDialogLayerCanvas(roots.BarrierRoot, true, true);
                 return roots;
             }
 
@@ -820,7 +820,7 @@ namespace Ursa.Dialogs
 
             go.AddComponent<Canvas>();
             go.AddComponent<GraphicRaycaster>();
-            ConfigureDialogLayerCanvas(rect, false);
+            ConfigureDialogLayerCanvas(rect, false, true);
             return rect;
         }
 
@@ -829,7 +829,7 @@ namespace Ursa.Dialogs
             var existing = ownerRoot.Find(name);
             if (existing is RectTransform existingRect)
             {
-                ConfigureDialogLayerCanvas(existingRect, isBarrier);
+                ConfigureDialogLayerCanvas(existingRect, isBarrier, true);
                 return existingRect;
             }
 
@@ -844,11 +844,11 @@ namespace Ursa.Dialogs
 
             go.AddComponent<Canvas>();
             go.AddComponent<GraphicRaycaster>();
-            ConfigureDialogLayerCanvas(rect, isBarrier);
+            ConfigureDialogLayerCanvas(rect, isBarrier, true);
             return rect;
         }
 
-        private void ConfigureDialogLayerCanvas(RectTransform rect, bool isBarrier)
+        private void ConfigureDialogLayerCanvas(RectTransform rect, bool isBarrier, bool foreground)
         {
             if (rect == null) return;
             var canvas = rect.GetComponent<Canvas>();
@@ -857,8 +857,10 @@ namespace Ursa.Dialogs
 
             if (isBarrier)
                 UrsaUICanvasUtility.ConfigureDialogBarrierCanvas(canvas);
-            else
+            else if (foreground)
                 UrsaUICanvasUtility.ConfigureDialogContentCanvas(canvas);
+            else
+                UrsaUICanvasUtility.ConfigureDialogBackgroundContentCanvas(canvas);
 
             if (rect.GetComponent<GraphicRaycaster>() == null)
                 rect.gameObject.AddComponent<GraphicRaycaster>();
@@ -869,7 +871,8 @@ namespace Ursa.Dialogs
             for (int i = 0; i < _history.Count; i++)
             {
                 var entry = _history[i];
-                ConfigureDialogLayerCanvas(entry.ContentRoot, false);
+                bool isTop = i == _history.Count - 1;
+                ConfigureDialogLayerCanvas(entry.ContentRoot, false, isTop);
                 var contentCanvas = entry.ContentRoot != null ? entry.ContentRoot.GetComponent<Canvas>() : null;
                 if (contentCanvas != null)
                     contentCanvas.sortingOrder = UrsaUIRenderOrder.DialogContent + i * 2;
@@ -879,7 +882,7 @@ namespace Ursa.Dialogs
                 return;
 
             var top = _history[_history.Count - 1];
-            ConfigureDialogLayerCanvas(top.BarrierRoot, true);
+            ConfigureDialogLayerCanvas(top.BarrierRoot, true, true);
             var barrierCanvas = top.BarrierRoot != null ? top.BarrierRoot.GetComponent<Canvas>() : null;
             if (barrierCanvas != null)
                 barrierCanvas.sortingOrder = UrsaUIRenderOrder.DialogContent + (_history.Count - 1) * 2 - 1;

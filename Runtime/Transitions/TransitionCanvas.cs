@@ -76,6 +76,15 @@ namespace Ursa.Transitions
             _directEffect = effect;
         }
 
+        public float MinimumCoveredDuration
+        {
+            get
+            {
+                var effect = _directEffect != null ? _directEffect : _controller?.Effect;
+                return effect != null ? effect.MinimumCoveredDuration : 0f;
+            }
+        }
+
         public async Task PlayOutAsync()
         {
             var effect = _directEffect != null ? _directEffect : _controller?.Effect;
