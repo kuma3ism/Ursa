@@ -131,7 +131,12 @@ namespace Ursa
         }
 
         private static void DisposeScene() => _scene = null;
-        private static void DisposeDialog() => _dialog = null;
+        private static void DisposeDialog()
+        {
+            if (_dialog is IDisposable disposable)
+                disposable.Dispose();
+            _dialog = null;
+        }
         private static void DisposeUI() => _ui = null;
     }
 

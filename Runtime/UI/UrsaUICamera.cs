@@ -9,7 +9,9 @@ namespace Ursa.UI
     /// </summary>
     public static class UrsaUICamera
     {
-        private const string CameraName = "[Ursa] UICamera";
+        private const string LegacyCameraName = "[Ursa] UICamera";
+        private const string SceneCameraName = "[Ursa] Scene UICamera";
+        private const string DialogCameraName = "[Ursa] Dialog UICamera";
         private const string UniversalCameraDataTypeName =
             "UnityEngine.Rendering.Universal.UniversalAdditionalCameraData, Unity.RenderPipelines.Universal.Runtime";
         private const string CameraRenderTypeTypeName =
@@ -19,7 +21,8 @@ namespace Ursa.UI
         private const string CameraOverrideOptionTypeName =
             "UnityEngine.Rendering.Universal.CameraOverrideOption, Unity.RenderPipelines.Universal.Runtime";
 
-        private static Camera _camera;
+        private static Camera _sceneCamera;
+        private static Camera _dialogCamera;
         private static Type _universalCameraDataType;
         private static Type _cameraRenderTypeType;
         private static Type _antialiasingModeType;
@@ -27,25 +30,65 @@ namespace Ursa.UI
 
         public static Camera Ensure()
         {
-            if (_camera != null && _camera.gameObject != null)
+            return EnsureDialogCamera();
+        }
+
+        public static Camera EnsureSceneCamera()
+        {
+            if (_sceneCamera != null && _sceneCamera.gameObject != null)
             {
-                Configure(_camera);
-                return _camera;
+                Configure(_sceneCamera);
+                return _sceneCamera;
             }
 
-            var existing = GameObject.Find(CameraName);
+            var existing = GameObject.Find(SceneCameraName);
             if (existing != null)
-                _camera = existing.GetComponent<Camera>();
+                _sceneCamera = existing.GetComponent<Camera>();
 
-            if (_camera == null)
+            if (_sceneCamera == null)
             {
-                var go = existing != null ? existing : new GameObject(CameraName);
-                _camera = go.AddComponent<Camera>();
+                var go = existing != null ? existing : new GameObject(SceneCameraName);
+                go.name = SceneCameraName;
+                _sceneCamera = go.AddComponent<Camera>();
             }
 
-            UnityEngine.Object.DontDestroyOnLoad(_camera.gameObject);
-            Configure(_camera);
-            return _camera;
+            UnityEngine.Object.DontDestroyOnLoad(_sceneCamera.gameObject);
+            Configure(_sceneCamera);
+            return _sceneCamera;
+        }
+
+        public static Camera EnsureDialogCamera()
+        {
+            if (_dialogCamera != null && _dialogCamera.gameObject != null)
+            {
+                Configure(_dialogCamera);
+                return _dialogCamera;
+            }
+
+            var existing = GameObject.Find(DialogCameraName);
+            if (existing == null)
+                existing = GameObject.Find(LegacyCameraName);
+            if (existing != null)
+                _dialogCamera = existing.GetComponent<Camera>();
+
+            if (_dialogCamera == null)
+            {
+                var go = existing != null ? existing : new GameObject(DialogCameraName);
+                go.name = DialogCameraName;
+                _dialogCamera = go.AddComponent<Camera>();
+            }
+
+            UnityEngine.Object.DontDestroyOnLoad(_dialogCamera.gameObject);
+            Configure(_dialogCamera);
+            return _dialogCamera;
+        }
+
+        public static bool IsSceneUICamera(Camera camera)
+        {
+            var sceneCamera = _sceneCamera;
+            return camera != null &&
+                   ((sceneCamera != null && camera == sceneCamera) ||
+                    string.Equals(camera.gameObject.name, SceneCameraName, StringComparison.Ordinal));
         }
 
         public static void AttachToBaseCamera(Camera baseCamera)
@@ -63,12 +106,16 @@ namespace Ursa.UI
             if (baseCamera == null)
                 return;
 
-            var uiCamera = Ensure();
-            if (baseCamera == uiCamera)
+            var sceneCamera = EnsureSceneCamera();
+            var dialogCamera = EnsureDialogCamera();
+            if (baseCamera == sceneCamera || baseCamera == dialogCamera)
                 return;
 
             if (exclusive)
-                DetachFromAllBaseCameras(uiCamera);
+            {
+                DetachFromAllBaseCameras(sceneCamera);
+                DetachFromAllBaseCameras(dialogCamera);
+            }
 
             var baseData = GetOrAddUniversalCameraData(baseCamera);
             if (baseData == null)
@@ -76,12 +123,18 @@ namespace Ursa.UI
             if (!HasEnumPropertyValue(baseData, "renderType", "Base"))
                 return;
 
-            var uiData = GetOrAddUniversalCameraData(uiCamera);
-            if (uiData == null)
+            var sceneData = GetOrAddUniversalCameraData(sceneCamera);
+            var dialogData = GetOrAddUniversalCameraData(dialogCamera);
+            if (sceneData == null || dialogData == null)
                 return;
 
-            SetEnumPropertyValue(uiData, "renderType", "Overlay");
-            AddCameraToStack(baseData, uiCamera);
+            SetEnumPropertyValue(sceneData, "renderType", "Overlay");
+            SetEnumPropertyValue(dialogData, "renderType", "Overlay");
+
+            RemoveCameraFromStack(baseData, sceneCamera);
+            RemoveCameraFromStack(baseData, dialogCamera);
+            AddCameraToStack(baseData, sceneCamera);
+            AddCameraToStack(baseData, dialogCamera);
         }
 
         public static void AttachToActiveBaseCameras()
@@ -95,7 +148,7 @@ namespace Ursa.UI
             Camera bestCamera = null;
             foreach (var camera in cameras)
             {
-                if (camera == null || !camera.enabled || camera == _camera)
+                if (camera == null || !camera.enabled || camera == _sceneCamera || camera == _dialogCamera)
                     continue;
 
                 var cameraData = GetUniversalCameraData(camera);

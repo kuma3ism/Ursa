@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Ursa.UI;
 
@@ -36,7 +37,7 @@ namespace Ursa.Dialogs
     /// バリアは各ダイアログのプレファブには含めず、マネージャーが1枚を管理します。
     /// 最前面ダイアログの直下に自動配置し、スタイル（Dimmed / RealtimeBlur / ScreenshotBlur）を適用します。
     /// </summary>
-    public class UrsaDialogManager : IDialogManager
+    public class UrsaDialogManager : IDialogManager, IDisposable
     {
         // ---- 依存 ----
 
@@ -109,16 +110,32 @@ namespace Ursa.Dialogs
 #else
             _logger = logger ?? new NullUrsaLogger();
 #endif
+            SceneManager.sceneUnloaded += OnSceneUnloaded;
         }
 
         // ---- IDialogManager ----
 
         public bool IsTransitioning => _transitionCount > 0;
-        public bool HasAnyDialog    => _history.Count > 0;
-        public IReadOnlyList<IDialogHistoryEntry> History => _history;
+        public bool HasAnyDialog
+        {
+            get
+            {
+                RemoveDestroyedHistoryEntries();
+                return _history.Count > 0;
+            }
+        }
+        public IReadOnlyList<IDialogHistoryEntry> History
+        {
+            get
+            {
+                RemoveDestroyedHistoryEntries();
+                return _history;
+            }
+        }
 
         public bool IsTopDialog(MonoBehaviour dialog)
         {
+            RemoveDestroyedHistoryEntries();
             if (_history.Count == 0) return false;
             return _history[_history.Count - 1].Instance == dialog.gameObject;
         }
@@ -221,6 +238,7 @@ namespace Ursa.Dialogs
 
         public async Task CloseTopAsync(DialogCloseReason reason = DialogCloseReason.Programmatic)
         {
+            RemoveDestroyedHistoryEntries();
             if (_history.Count == 0)
             {
                 _logger.LogWarning("[Ursa] CloseTopAsync: 閉じるダイアログがありません。");
@@ -255,6 +273,7 @@ namespace Ursa.Dialogs
 
         public async Task CloseAllAsync(DialogCloseReason reason = DialogCloseReason.Programmatic)
         {
+            RemoveDestroyedHistoryEntries();
             _transitionCount++;
             try
             {
@@ -731,9 +750,37 @@ namespace Ursa.Dialogs
 
         private RectTransform GetOwnerRoot(DialogPlacement placement)
         {
-            if (placement == DialogPlacement.Scene && _defaultParent != null)
-                return _defaultParent;
+            if (placement == DialogPlacement.Scene)
+            {
+                if (_defaultParent != null)
+                    return _defaultParent;
+                return GetOrCreateSceneDialogRoot(SceneManager.GetActiveScene());
+            }
             return GetOrCreateDdolRoot();
+        }
+
+        private RectTransform GetOrCreateSceneDialogRoot(Scene scene)
+        {
+            if (!scene.IsValid() || !scene.isLoaded)
+                return GetOrCreateDdolRoot();
+
+            var roots = scene.GetRootGameObjects();
+            foreach (var root in roots)
+            {
+                if (root.name == "[UrsaSceneDialogRoot]" && root.transform is RectTransform existing)
+                    return existing;
+            }
+
+            var go = new GameObject("[UrsaSceneDialogRoot]", typeof(RectTransform));
+            SceneManager.MoveGameObjectToScene(go, scene);
+            UrsaUICanvasUtility.ConfigureManagedObject(go);
+
+            var rect = (RectTransform)go.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            return rect;
         }
 
         private DialogLayerRoots GetOrCreateDialogLayerRoots(RectTransform ownerRoot)
@@ -861,6 +908,47 @@ namespace Ursa.Dialogs
         {
             for (int i = 0; i < _history.Count; i++)
                 _history[i].Index = i;
+        }
+
+        private void OnSceneUnloaded(Scene scene)
+        {
+            if (RemoveDestroyedHistoryEntries(scene))
+                UpdateBarrier();
+        }
+
+        private void RemoveDestroyedHistoryEntries()
+        {
+            RemoveDestroyedHistoryEntries(default);
+        }
+
+        private bool RemoveDestroyedHistoryEntries(Scene unloadedScene)
+        {
+            var removed = false;
+            for (int i = _history.Count - 1; i >= 0; i--)
+            {
+                var entry = _history[i];
+                var ownerScene = entry.OwnerRoot != null ? entry.OwnerRoot.gameObject.scene : default;
+                var matchesUnloadedScene =
+                    unloadedScene.IsValid() &&
+                    ownerScene.IsValid() &&
+                    ownerScene.handle == unloadedScene.handle;
+
+                if (entry.Instance != null && entry.ContentRoot != null && entry.OwnerRoot != null && !matchesUnloadedScene)
+                    continue;
+
+                _history.RemoveAt(i);
+                _loader.Unload(entry.DialogName);
+                removed = true;
+            }
+
+            if (removed)
+                RebuildIndices();
+            return removed;
+        }
+
+        public void Dispose()
+        {
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
         }
     }
 

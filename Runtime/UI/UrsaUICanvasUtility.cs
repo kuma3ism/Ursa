@@ -13,7 +13,7 @@ namespace Ursa.UI
 
         public static void ConfigureSceneCanvas(Canvas canvas, int sceneIndex)
         {
-            Configure(canvas, UrsaUIRenderOrder.SceneBase + sceneIndex * UrsaUIRenderOrder.SceneStep);
+            ConfigureScene(canvas, UrsaUIRenderOrder.SceneBase + sceneIndex * UrsaUIRenderOrder.SceneStep);
         }
 
         public static void ConfigureDialogCanvas(Canvas canvas)
@@ -104,16 +104,28 @@ namespace Ursa.UI
 
         private static void Configure(Canvas canvas, int sortingOrder)
         {
+            Configure(canvas, sortingOrder, UrsaUICamera.EnsureDialogCamera());
+        }
+
+        private static void ConfigureScene(Canvas canvas, int sortingOrder)
+        {
+            Configure(canvas, sortingOrder, UrsaUICamera.EnsureSceneCamera());
+        }
+
+        private static void Configure(Canvas canvas, int sortingOrder, Camera worldCamera)
+        {
             if (canvas == null) return;
 
             canvas.renderMode = RenderMode.ScreenSpaceCamera;
-            canvas.worldCamera = UrsaUICamera.Ensure();
+            canvas.worldCamera = worldCamera;
             canvas.planeDistance = 1f;
             canvas.sortingOrder = sortingOrder;
 
             int uiLayer = LayerMask.NameToLayer("UI");
             if (uiLayer >= 0)
                 SetLayerRecursively(canvas.gameObject, uiLayer);
+
+            UrsaUICamera.AttachToActiveBaseCameras();
         }
 
         private static void SetLayerRecursively(GameObject go, int layer)

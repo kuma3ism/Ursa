@@ -4,6 +4,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.RenderGraphModule.Util;
+using Ursa.UI;
 
 namespace Ursa.Dialogs.Rendering
 {
@@ -37,7 +38,7 @@ namespace Ursa.Dialogs.Rendering
             var cameraType = renderingData.cameraData.cameraType;
             if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
                 return;
-            if (renderingData.cameraData.renderType != CameraRenderType.Base)
+            if (!ShouldCopyCamera(renderingData.cameraData.camera, renderingData.cameraData.renderType))
                 return;
 
             if (_pass == null)
@@ -97,7 +98,7 @@ namespace Ursa.Dialogs.Rendering
 
                 if (cameraData.cameraType != CameraType.Game && cameraData.cameraType != CameraType.SceneView)
                     return;
-                if (cameraData.renderType != CameraRenderType.Base)
+                if (!ShouldCopyCamera(cameraData.camera, cameraData.renderType))
                     return;
 
                 var descriptor = cameraData.cameraTargetDescriptor;
@@ -138,7 +139,7 @@ namespace Ursa.Dialogs.Rendering
                 var cameraType = renderingData.cameraData.cameraType;
                 if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
                     return;
-                if (renderingData.cameraData.renderType != CameraRenderType.Base)
+                if (!ShouldCopyCamera(renderingData.cameraData.camera, renderingData.cameraData.renderType))
                     return;
 
                 var cmd = CommandBufferPool.Get();
@@ -159,6 +160,11 @@ namespace Ursa.Dialogs.Rendering
                 _copyTexture?.Release();
                 _copyTexture = null;
             }
+        }
+
+        private static bool ShouldCopyCamera(Camera camera, CameraRenderType renderType)
+        {
+            return renderType == CameraRenderType.Base || UrsaUICamera.IsSceneUICamera(camera);
         }
     }
 }
