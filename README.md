@@ -11,6 +11,9 @@ Unityの俺俺フレームワーク（まだいろいろ作成中）
   - シーンジェネレーター：シーンを自動作成
 - UIボタン管理（完成）
 - **ダイアログ管理（着手）**
+  - Scene / DontDestroyOnLoad 配置
+  - Dimmed / RealtimeBlur / ScreenshotBlur バリア
+  - ダイアログを重ねた時の前後関係とブラー対応
 - 音声管理（未着手）
  
 ## UPM インストール
@@ -159,6 +162,10 @@ public class OverlayParameter : ISceneParameter
 `IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
 通常は `Overlay` 表示でも履歴に積む方が、`CloseAsync()` や戻る操作と相性がよいです。
 
+> **Overlay の扱い**
+> `Overlay` は背面シーンを残したまま前面にシーンを追加する表示方式です。ポーズメニュー、モーダルなサブ画面、演出用レイヤーのように「元の画面を維持したまま一時的に重ねたい」用途で使います。
+> `Fullscreen` のシーンが上に乗った場合、背面シーンの Canvas / GraphicRaycaster は自動で無効化され、背面 UI の描画・入力を止めます。`Overlay` の場合は背面表示を残します。
+
 ### 2. シーンクラスの定義
 
 #### 戻り値なし（一方通行の画面遷移）
@@ -230,6 +237,9 @@ await UrsaCore.Scene.RestartAsync<BootScene>();
 ```csharp
 await UrsaCore.Scene.JumpToAsync<GameScene>();
 ```
+
+起動時点で既に開かれているシーンも、`SceneBase` を継承したコンポーネントが見つかれば型付き履歴として登録されます。
+そのため、最初のシーンへ戻る用途でも `JumpToAsync<BootScene>()` のように型指定できます。
 
 インデックス（0が最も古い）でも指定できます。範囲外は `ArgumentOutOfRangeException` をスローします。
 
@@ -388,6 +398,22 @@ public class MyTransition : TransitionEffectBase
 await UrsaCore.Scene.PushAsync<NextScene>(param, "MyCustomTransition");
 ```
 
+### 画面を覆った状態の最低表示時間
+
+`TransitionEffectBase` の Inspector にある **Minimum Covered Duration** を設定すると、`PlayOutAsync()` 完了後から `PlayInAsync()` 開始前まで、画面が覆われた状態を最低限維持できます。
+
+```text
+PlayOutAsync
+↓
+シーンロード / Push / Pop / Replace などの本処理
+↓
+Minimum Covered Duration に満たなければ差分だけ待機
+↓
+PlayInAsync
+```
+
+本処理にかかった時間も含めて計算されます。たとえば `Minimum Covered Duration = 1.0` でシーンロードが `0.7` 秒なら、追加待機は約 `0.3` 秒です。ロードが `1.2` 秒かかった場合は追加待機しません。
+
 ### Prefab の再生成（開発者向け）
 
 | メニュー | 用途 |
@@ -500,6 +526,18 @@ public class ConfirmDialogParameter : IDialogParameter
 > 現在の API では `BarrierStyle.Dimmed` を「未指定」として扱い、`UrsaDialogManager.DefaultBarrierStyle` を適用します。  
 > そのため `DefaultBarrierStyle = BarrierStyle.RealtimeBlur` の状態では、個別ダイアログだけを明示的に `Dimmed` に戻すことはできません。個別指定として使えるのは `None` / `RealtimeBlur` / `ScreenshotBlur` です。
 
+### Scene ダイアログとグローバルダイアログ
+
+`IDialogParameter.Placement` で、ダイアログの寿命と配置先を選べます。
+
+| Placement | 配置先 | 主な用途 |
+|---|---|---|
+| `Scene` | 現在のシーン配下の `[UrsaSceneDialogRoot]` | そのシーンに紐付く確認・通知。シーン破棄時に一緒に消える |
+| `DontDestroyOnLoad` | DontDestroyOnLoad の `[UrsaDialogRoot]` | シーンをまたいで残したいシステム通知、通信エラー、強制メンテナンス表示など |
+
+`Scene` 配置のダイアログは、所有シーンがUnloadされた時に履歴からも取り除かれます。
+シーン遷移をまたいでも残したいダイアログは `DontDestroyOnLoad` を指定してください。
+
 ### リアルタイムブラー
 
 全ダイアログの既定バリアをリアルタイムブラーにする場合は、`UrsaDialogManager` を初期化する前に設定します。
@@ -539,6 +577,10 @@ URP で `RendererFeature` を使う場合は、使用中の Universal Renderer D
 
 > **Screen Space - Overlay について**
 > URP の `_CameraOpaqueTexture` / `RendererFeature` はカメラが描画した結果だけを入力にします。`Screen Space - Overlay` Canvas はカメラ描画後に合成されるため、ブラー元には含まれません。Ursa が管理する Scene UI / Dialog / Transition / Tap effect は `Screen Space - Camera` 前提で扱います。
+
+> **重なったダイアログとブラー**
+> ダイアログが複数重なっている場合、最前面より下のダイアログはブラー元として描画され、最前面のバリアとダイアログはその上に描画されます。
+> これにより、2枚目以降のダイアログを開いた時に「背面のシーン + 背面のダイアログ」がぼけた背景として見える構成になります。
 
 #### 2. ダイアログクラスの定義
 
