@@ -16,7 +16,7 @@ namespace Ursa.Transitions
 
         private void Awake()
         {
-            DontDestroyOnLoad(gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(gameObject);
         }
 
         public override async Task PlayOutAsync()

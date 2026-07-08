@@ -54,7 +54,7 @@ namespace Ursa.UI
                 _sceneCamera = go.AddComponent<Camera>();
             }
 
-            UnityEngine.Object.DontDestroyOnLoad(_sceneCamera.gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(_sceneCamera.gameObject);
             Configure(_sceneCamera);
             return _sceneCamera;
         }
@@ -80,7 +80,7 @@ namespace Ursa.UI
                 _dialogCamera = go.AddComponent<Camera>();
             }
 
-            UnityEngine.Object.DontDestroyOnLoad(_dialogCamera.gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(_dialogCamera.gameObject);
             Configure(_dialogCamera);
             return _dialogCamera;
         }
@@ -104,7 +104,7 @@ namespace Ursa.UI
                 _dialogBackgroundCamera = go.AddComponent<Camera>();
             }
 
-            UnityEngine.Object.DontDestroyOnLoad(_dialogBackgroundCamera.gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(_dialogBackgroundCamera.gameObject);
             Configure(_dialogBackgroundCamera);
             return _dialogBackgroundCamera;
         }

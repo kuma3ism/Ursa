@@ -42,7 +42,7 @@ namespace Ursa.Transitions
                 return;
             }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(gameObject);
 
             var canvas = GetComponent<Canvas>();
             UrsaUICanvasUtility.ConfigureTransitionCanvas(canvas);

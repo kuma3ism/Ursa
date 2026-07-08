@@ -17,7 +17,7 @@ namespace Ursa.Transitions
 
         private void Awake()
         {
-            DontDestroyOnLoad(gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(gameObject);
         }
 
         public override async Task PlayOutAsync() => await TweenAsync(0f, 1f, _outDuration);

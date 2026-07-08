@@ -897,7 +897,7 @@ namespace Ursa.Dialogs
             }
 
             var go = new GameObject("[UrsaDialogRoot]");
-            UnityEngine.Object.DontDestroyOnLoad(go);
+            UrsaDontDestroyOnLoadRoot.Attach(go);
             _ddolCanvas = go.AddComponent<Canvas>();
             UrsaUICanvasUtility.ConfigureDialogCanvas(_ddolCanvas);
             UrsaUICamera.AttachToActiveBaseCameras();
@@ -968,7 +968,7 @@ namespace Ursa.Dialogs
                 if (_instance != null) return _instance;
 
                 var go = new GameObject("[UrsaDialogCoroutineRunner]");
-                UnityEngine.Object.DontDestroyOnLoad(go);
+                UrsaDontDestroyOnLoadRoot.Attach(go);
                 _instance = go.AddComponent<UrsaDialogCoroutineRunner>();
                 return _instance;
             }
