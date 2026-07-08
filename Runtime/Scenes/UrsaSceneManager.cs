@@ -121,12 +121,8 @@ namespace Ursa
             if (minimumCoveredDuration <= 0f)
                 return;
 
-            float elapsed = Time.realtimeSinceStartup - coveredStartTime;
-            float remaining = minimumCoveredDuration - elapsed;
-            if (remaining <= 0f)
-                return;
-
-            await Task.Delay(TimeSpan.FromSeconds(remaining));
+            while (Time.realtimeSinceStartup - coveredStartTime < minimumCoveredDuration)
+                await Task.Yield();
         }
 
         // 現在最前面のシーンから TransitionController を取得（なければ null）

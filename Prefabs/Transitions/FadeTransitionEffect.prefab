@@ -52,17 +52,17 @@ Canvas:
   serializedVersion: 3
   m_RenderMode: 0
   m_Camera: {fileID: 0}
-  m_PlaneDistance: 100
+  m_PlaneDistance: 1
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
-  m_OverrideSorting: 0
+  m_OverrideSorting: 1
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 9999
+  m_SortingOrder: 9000
   m_TargetDisplay: 0
 --- !u!114 &1194540584980339557
 MonoBehaviour:
@@ -128,6 +128,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 66c6389b897e44e04942ea67c38eb645, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ursa.Runtime::Ursa.Transitions.FadeTransitionEffect
+  _minimumCoveredDuration: 2
   _canvasGroup: {fileID: 8849784730188971294}
   _outDuration: 0.3
   _inDuration: 0.3

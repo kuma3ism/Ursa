@@ -44,7 +44,17 @@ namespace Ursa.UI
 
         public static void ConfigureTransitionCanvas(Canvas canvas)
         {
-            Configure(canvas, UrsaUIRenderOrder.Transition);
+            if (canvas == null)
+                return;
+
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.worldCamera = null;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.overrideSorting = true;
+
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0)
+                SetLayerRecursively(canvas.gameObject, uiLayer);
         }
 
         public static void ConfigureTapEffectCanvas(Canvas canvas)
