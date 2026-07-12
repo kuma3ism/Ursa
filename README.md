@@ -160,7 +160,7 @@ public class OverlayParameter : ISceneParameter
 ```
 
 `IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
-通常は `Overlay` 表示でも履歴に積む方が、`CloseAsync()` や戻る操作と相性がよいです。
+通常は `Overlay` 表示でも履歴に積む方が、`PopAsync()` や `CloseAsync()` と相性がよいです。
 
 > **Overlay の扱い**
 > `Overlay` は背面シーンを残したまま前面にシーンを追加する表示方式です。ポーズメニュー、モーダルなサブ画面、演出用レイヤーのように「元の画面を維持したまま一時的に重ねたい」用途で使います。
@@ -201,13 +201,27 @@ await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter());
 await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter(), TransitionType.Wipe);
 ```
 
-### Pop（戻る）
+### Pop（履歴を戻る）
+
+```csharp
+await UrsaCore.Scene.PopAsync();
+```
+
+`PopAsync()` は履歴スタックを1つ戻します。
+`PushAsync()` で追加されたシーンなら、そのシーンを閉じて1つ前へ戻ります。
+`ReplaceAsync()` で差し替えられたシーンなら、置き換え元のシーンを復元します。
+
+### Close（現在のシーンを閉じる）
 
 ```csharp
 await CloseAsync(); // SceneBase メソッド。自身を閉じる
 // または
-await UrsaCore.Scene.PopAsync();
+await UrsaCore.Scene.CloseAsync();
 ```
+
+`CloseAsync()` は現在の最前面シーンを閉じます。
+`ReplaceAsync()` で差し替えられたシーンを閉じる場合、置き換え元は復元せず、置き換え履歴ごと破棄します。
+`SceneBase.CloseAsync()` は自分自身のシーンからの close 要求として扱われ、最前面ではないシーンから呼ばれた場合は無視されます。
 
 ### Replace（入れ替え）
 
@@ -276,7 +290,7 @@ await scene.ReplaceAsync(new MySceneParameter { Message = "Hello!" });
 | `OnInitializeAsync(T)` | シーン入場時（パラメーター注入後）。この時点で PreloadResourcesAsync は完了済み |
 | `OnResumeScene()` | 前面シーンが閉じて自分が最前面に戻った時。トランジション有無に関わらず発火 |
 | `OnPauseScene()` | 自分の上に別シーンが重なった時（OnResumeScene の逆）。トランジション有無に関わらず発火 |
-| `OnSceneWillClose()` | CloseAsync() が呼ばれる直前 |
+| `OnSceneWillClose()` | `SceneBase.CloseAsync()` が呼ばれる直前 |
 | `OnBackKeyPressed()` | バックキー（Escape / Android バックキー）押下時 |
 | `OnDestroy()` | GameObject が破棄される時（Unity標準） |
 
@@ -303,7 +317,7 @@ protected override async Task OnSceneWillClose()
     await SaveAsync();
 }
 
-// バックキーのカスタマイズ
+// バックキーのカスタマイズ（デフォルトは CloseAsync）
 protected override async Task OnBackKeyPressed()
 {
     await CloseAsync();
