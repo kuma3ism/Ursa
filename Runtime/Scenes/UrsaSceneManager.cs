@@ -58,6 +58,7 @@ namespace Ursa
         private readonly List<ISceneBackHandler> _backHandlerBuffer = new List<ISceneBackHandler>();
         private readonly List<ISceneManagerReceiver> _managerReceiverBuffer = new List<ISceneManagerReceiver>();
         private readonly Dictionary<Component, bool> _hiddenComponentStates = new Dictionary<Component, bool>();
+        private readonly List<Component> _hiddenComponentStatePurgeBuffer = new List<Component>();
 
         public UrsaSceneManager(ISceneLoader sceneLoader = null, IUrsaLogger logger = null)
         {
@@ -134,6 +135,10 @@ namespace Ursa
                 {
                     UnityEngine.Object.Destroy(manualEffect.gameObject);
                 }
+                // シーンのアンロード（Additive経由、あるいは LoadSceneMode.Single による
+                // Unity側の自動破棄の両方）によって破棄された Component が
+                // _hiddenComponentStates に残り続けないよう、遷移の都度掃除する。
+                PurgeDestroyedHiddenComponentStates();
             }
         }
 
@@ -752,6 +757,36 @@ namespace Ursa
                 component.enabled = enabled;
                 _hiddenComponentStates.Remove(component);
             }
+        }
+
+        /// <summary>
+        /// _hiddenComponentStates に残っている、既に破棄済み（Destroy済み）の Component の
+        /// エントリを取り除く。
+        ///
+        /// SetSceneVisualsVisible で非表示にした Component が、再表示（RestoreEnabled）される前に
+        /// シーンごとアンロード（Additive の UnloadSceneAsync、または LoadSceneMode.Single による
+        /// Unity側の自動破棄）された場合、_hiddenComponentStates に破棄済み Component への
+        /// キーが残り続けてしまう（メモリリーク）。Unity の Object は破棄後も == null が true を
+        /// 返すため、それを利用してエントリを検出・除去する。
+        /// </summary>
+        private void PurgeDestroyedHiddenComponentStates()
+        {
+            if (_hiddenComponentStates.Count == 0)
+                return;
+
+            _hiddenComponentStatePurgeBuffer.Clear();
+            foreach (var component in _hiddenComponentStates.Keys)
+            {
+                if (component == null)
+                    _hiddenComponentStatePurgeBuffer.Add(component);
+            }
+
+            if (_hiddenComponentStatePurgeBuffer.Count == 0)
+                return;
+
+            foreach (var key in _hiddenComponentStatePurgeBuffer)
+                _hiddenComponentStates.Remove(key);
+            _hiddenComponentStatePurgeBuffer.Clear();
         }
 
         private UrsaScenePresentation GetPresentation(ISceneParameter parameter)
