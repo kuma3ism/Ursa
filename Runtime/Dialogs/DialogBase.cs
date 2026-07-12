@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Ursa.UI;
 
 namespace Ursa.Dialogs
 {
@@ -17,10 +18,21 @@ namespace Ursa.Dialogs
         IDialogReceiverBase,
         IDialogReceiver<TParam, TResult>,
         IOpenDialog<TResult>,
-        IDialogLifecycleEvents
+        IDialogLifecycleEvents,
+        IUrsaButtonBlockScope
         where TParam : IDialogParameter
     {
         [SerializeField] private bool _handleBackKey = true;
+
+        // ---- IUrsaButtonBlockScope ----
+        // このダイアログインスタンス自体がスコープなので、中の UrsaButton 同士はこのブロック状態を共有する。
+        // ダイアログを開いたボタン自体は別のスコープ（呼び出し側の Canvas / Scene / Dialog）に
+        // 属するので、OpenWithCloseAsync のように「閉じるまで待つ」呼び出し方でも
+        // ダイアログ自体の OK/Cancel ボタンをブロックしない。
+        private readonly UrsaButtonBlockState _buttonBlockState = new UrsaButtonBlockState();
+        bool IUrsaButtonBlockScope.IsBlocked(float now) => _buttonBlockState.IsBlocked(now);
+        void IUrsaButtonBlockScope.Begin() => _buttonBlockState.Begin();
+        void IUrsaButtonBlockScope.End(float now) => _buttonBlockState.End(now);
 
         /// <summary>バックキー（Escape）による自動Close処理を有効/無効にします。</summary>
         protected void SetBackKeyEnabled(bool enabled) => _handleBackKey = enabled;
@@ -141,10 +153,27 @@ namespace Ursa.Dialogs
         private void LateUpdate()
         {
             if (!_handleBackKey) return;
+            if (!UrsaCore.IsDialogReady) return;
             if (UrsaCore.Dialog?.IsTransitioning == true) return;
             if (!UrsaCore.Dialog.IsTopDialog(this)) return;
+            if (!IsVisibleInEnabledCanvas()) return;
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 _ = OnBackKeyPressed();
+        }
+
+        private bool IsVisibleInEnabledCanvas()
+        {
+            if (!gameObject.activeInHierarchy) return false;
+
+            var canvases = GetComponentsInParent<Canvas>(true);
+            foreach (var canvas in canvases)
+            {
+                if (canvas == null) continue;
+                if (!canvas.enabled || !canvas.gameObject.activeInHierarchy)
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>

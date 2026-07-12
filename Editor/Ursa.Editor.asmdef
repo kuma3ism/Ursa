@@ -14,7 +14,13 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.core",
+            "expression": "0.0.0",
+            "define": "URSA_HAS_CORE_RP"
+        }
+    ],
     "noEngineReferences": false
 }
 

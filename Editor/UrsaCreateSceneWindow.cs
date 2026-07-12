@@ -2,8 +2,11 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+#if URSA_HAS_CORE_RP
 using UnityEngine.Rendering;
+#endif
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Ursa.Editor
 {
@@ -153,12 +156,32 @@ namespace Ursa.Editor
             lightGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             SceneManager.MoveGameObjectToScene(lightGO, newScene);
 
+#if URSA_HAS_CORE_RP
+            // Volume は Core RP Library (URP/HDRP) が入っている環境でのみ作成する。
+            // Built-in RP専用プロジェクトでは Core RP Library が存在しないため、このブロック自体をコンパイル対象から外す。
             var volumeGO = new GameObject("Global Volume");
             var volume = volumeGO.AddComponent<Volume>();
             volume.isGlobal = true;
             var defaultProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/Settings/DefaultVolumeProfile.asset");
             if (defaultProfile != null) volume.sharedProfile = defaultProfile;
             SceneManager.MoveGameObjectToScene(volumeGO, newScene);
+#endif
+
+            var canvasGO = new GameObject("UiCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(global::Ursa.UI.UrsaUICanvas));
+            canvasGO.transform.SetParent(rootGO.transform, false);
+            var canvas = canvasGO.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = cameraGO.GetComponent<Camera>();
+            canvas.planeDistance = 1f;
+            var scaler = canvasGO.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+            var rect = canvasGO.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
 
             EditorSceneManager.SaveScene(newScene, scenePath);
             EditorSceneManager.CloseScene(newScene, true);

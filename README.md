@@ -11,6 +11,9 @@ Unityの俺俺フレームワーク（まだいろいろ作成中）
   - シーンジェネレーター：シーンを自動作成
 - UIボタン管理（完成）
 - **ダイアログ管理（着手）**
+  - Scene / DontDestroyOnLoad 配置
+  - Dimmed / RealtimeBlur / ScreenshotBlur バリア
+  - ダイアログを重ねた時の前後関係とブラー対応
 - 音声管理（未着手）
  
 ## UPM インストール
@@ -146,15 +149,22 @@ public class MySceneParameter : ISceneParameter
 }
 ```
 
-`IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
-バックキーで戻れないオーバーレイ表示などに使います。
+`Presentation` を `Overlay` にすると、背面シーンを表示したまま重ねられます。
+通常の画面遷移はデフォルトの `Fullscreen` を使います。
 
 ```csharp
 public class OverlayParameter : ISceneParameter
 {
-    bool ISceneParameter.IsHistory => false; // 履歴に残さない
+    UrsaScenePresentation ISceneParameter.Presentation => UrsaScenePresentation.Overlay;
 }
 ```
+
+`IsHistory` を `false` にすると、シーンは表示されますが履歴スタックには積まれません。
+通常は `Overlay` 表示でも履歴に積む方が、`CloseAsync()` や戻る操作と相性がよいです。
+
+> **Overlay の扱い**
+> `Overlay` は背面シーンを残したまま前面にシーンを追加する表示方式です。ポーズメニュー、モーダルなサブ画面、演出用レイヤーのように「元の画面を維持したまま一時的に重ねたい」用途で使います。
+> `Fullscreen` のシーンが上に乗った場合、背面シーンの Canvas / GraphicRaycaster は自動で無効化され、背面 UI の描画・入力を止めます。`Overlay` の場合は背面表示を残します。
 
 ### 2. シーンクラスの定義
 
@@ -180,7 +190,7 @@ public class MyScene : SceneBase<MySceneParameter>
 ## シーン遷移 API
 
 すべての操作は `UrsaCore.Scene` 経由で行います。  
-`transitionName` を省略するとデフォルトで **Fade** が使用されます。
+`transitionName` を省略すると `UrsaSettings.DefaultSceneTransitionName` が使用されます（初期値は **Fade**）。
 
 ### Push（重ねる）
 
@@ -188,7 +198,7 @@ public class MyScene : SceneBase<MySceneParameter>
 await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter());
 
 // トランジションを指定する場合
-await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter(), TransitionType.Dissolve);
+await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter(), TransitionType.Wipe);
 ```
 
 ### Pop（戻る）
@@ -227,6 +237,9 @@ await UrsaCore.Scene.RestartAsync<BootScene>();
 ```csharp
 await UrsaCore.Scene.JumpToAsync<GameScene>();
 ```
+
+起動時点で既に開かれているシーンも、`SceneBase` を継承したコンポーネントが見つかれば型付き履歴として登録されます。
+そのため、最初のシーンへ戻る用途でも `JumpToAsync<BootScene>()` のように型指定できます。
 
 インデックス（0が最も古い）でも指定できます。範囲外は `ArgumentOutOfRangeException` をスローします。
 
@@ -336,12 +349,13 @@ protected override async Task OnInitializeAsync(MyParameter parameter)
 ## トランジション
 
 シーン遷移時にフェードなどの演出を挟むことができます。  
-デフォルトは **Fade** です。トランジションなしで遷移したい場合は `null` を渡してください。
+デフォルトは `UrsaSettings.DefaultSceneTransitionName` で変更できます（初期値は **Fade**）。
+トランジションなしで遷移したい場合は `null` または空文字を渡してください。
 
 ```csharp
-await UrsaCore.Scene.PushAsync<NextScene>(param);                      // Fade（デフォルト）
-await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Spade); // Spade
-await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // トランジションなし
+await UrsaCore.Scene.PushAsync<NextScene>(param);                         // Settings のデフォルト
+await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Spade);    // Spade
+await UrsaCore.Scene.PushAsync<NextScene>(param, null);                    // トランジションなし
 ```
 
 ### 組み込みトランジション名
@@ -350,7 +364,8 @@ await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // ト�
 
 | 定数 | 文字列値 | 演出 |
 |---|---|---|
-| `TransitionType.Fade` | `"Fade"` | 画面全体がじわっと黒くなる（デフォルト） |
+| `TransitionType.Default` | `"__UrsaDefault"` | `UrsaSettings.DefaultSceneTransitionName` を使う |
+| `TransitionType.Fade` | `"Fade"` | 画面全体がじわっと黒くなる |
 | `TransitionType.Wipe` | `"Wipe"` | 左から右に黒が流れる |
 | `TransitionType.Circle` | `"Circle"` | 中心から黒い円が広がる |
 | `TransitionType.Spade` | `"Spade"` | スペードが中央から拡大・縮小する（Animator） |
@@ -358,6 +373,7 @@ await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // ト�
 ### UrsaSettings
 
 `Assets/Resources/Ursa/UrsaSettings.asset` でトランジション名とプレハブのマッピングを管理しています。  
+`DefaultSceneTransitionName` で Scene API の省略時トランジションを設定できます。
 エディター初回起動時に同梱プレハブが自動登録されます。独自のトランジションを追加する場合は Inspector から直接登録できます。
 
 ### シーン固有のトランジション（TransitionController）
@@ -384,6 +400,25 @@ public class MyTransition : TransitionEffectBase
 ```csharp
 await UrsaCore.Scene.PushAsync<NextScene>(param, "MyCustomTransition");
 ```
+
+### 画面を覆った状態の最低表示時間
+
+`TransitionEffectBase` の Inspector にある **Minimum Covered Duration** を設定すると、`PlayOutAsync()` 完了後から `PlayInAsync()` 開始前まで、画面が覆われた状態を最低限維持できます。
+
+```text
+PlayOutAsync
+↓
+シーンロード / Push / Pop / Replace などの本処理
+↓
+Minimum Covered Duration に満たなければ差分だけ待機
+↓
+PlayInAsync
+```
+
+本処理にかかった時間も含めて計算されます。たとえば `Minimum Covered Duration = 1.0` でシーンロードが `0.3` 秒なら、追加待機は約 `0.7` 秒です。ロードが `1.2` 秒かかった場合は追加待機しません。
+
+この値はトランジションPrefabごとに保持します。Fade / Wipe / Circle / Spade など、演出ごとに必要な余韻を個別に調整できるためです。
+プロジェクト全体で一括管理したい場合は、将来的に `UrsaSettings` 側へグローバル既定値を追加し、Prefab側が未指定の時だけ参照する設計も検討できます。
 
 ### Prefab の再生成（開発者向け）
 
@@ -491,6 +526,69 @@ public class ConfirmDialogParameter : IDialogParameter
 | `IsHistory` | `true` | 履歴スタックに積むかどうか。`false` にすると積まれません |
 | `BarrierDismissible` | `false` | バリア（背景）タップで閉じることを許可するか |
 | `Placement` | `Scene` | `Scene`（defaultParent に配置）または `DontDestroyOnLoad` |
+| `BarrierStyle` | `Dimmed` | バリアの見た目。`None` / `RealtimeBlur` / `ScreenshotBlur` は個別指定として扱われます |
+
+> **BarrierStyle の注意**  
+> 現在の API では `BarrierStyle.Dimmed` を「未指定」として扱い、`UrsaDialogManager.DefaultBarrierStyle` を適用します。  
+> そのため `DefaultBarrierStyle = BarrierStyle.RealtimeBlur` の状態では、個別ダイアログだけを明示的に `Dimmed` に戻すことはできません。個別指定として使えるのは `None` / `RealtimeBlur` / `ScreenshotBlur` です。
+
+### Scene ダイアログとグローバルダイアログ
+
+`IDialogParameter.Placement` で、ダイアログの寿命と配置先を選べます。
+
+| Placement | 配置先 | 主な用途 |
+|---|---|---|
+| `Scene` | 現在のシーン配下の `[UrsaSceneDialogRoot]` | そのシーンに紐付く確認・通知。シーン破棄時に一緒に消える |
+| `DontDestroyOnLoad` | DontDestroyOnLoad の `[UrsaDialogRoot]` | シーンをまたいで残したいシステム通知、通信エラー、強制メンテナンス表示など |
+
+`Scene` 配置のダイアログは、Ursa の履歴スタックで現在最前面のシーンに所属します。
+Fullscreen のシーンに覆われている間は非表示になり、所有シーンが再び最前面に戻ると復帰します。
+所有シーンがUnloadされた時は履歴からも取り除かれます。
+シーン遷移をまたいでも残したいダイアログは `DontDestroyOnLoad` を指定してください。
+
+### リアルタイムブラー
+
+全ダイアログの既定バリアをリアルタイムブラーにする場合は、`UrsaDialogManager` を初期化する前に設定します。
+
+```csharp
+var dialogManager = new UrsaDialogManager
+{
+    DefaultBarrierStyle = BarrierStyle.RealtimeBlur,
+    RealtimeBlurMode = RealtimeBlurMode.Auto,
+    RealtimeBlurSize = 4.0f,
+    BlurOverlayColor = new Color(0f, 0f, 0f, 0.3f),
+};
+
+UrsaCore.Initialize(dialogManager);
+```
+
+個別ダイアログだけをブラーにしたい場合は、パラメーターで `BarrierStyle.RealtimeBlur` を返します。
+
+```csharp
+public class ConfirmDialogParameter : IDialogParameter
+{
+    BarrierStyle IDialogParameter.BarrierStyle => BarrierStyle.RealtimeBlur;
+}
+```
+
+`RealtimeBlurMode` は以下から選択できます。
+
+| Mode | 用途 | 必要な設定 |
+|---|---|---|
+| `Auto` | Render Pipeline に応じて自動選択 | URP では `RendererFeature` を優先 |
+| `LegacyGrabPass` | Built-in Render Pipeline 向け | GrabPass 対応 shader |
+| `CameraOpaqueTexture` | URP の `_CameraOpaqueTexture` を使う | URP Asset / Camera の Opaque Texture を有効化 |
+| `RendererFeature` | URP の RendererFeature で scene / UI 描画後の色をコピー | Universal Renderer Data に `UrsaDialogBlurRendererFeature` を追加 |
+| `ScreenshotFallback` | 開いた瞬間のスクリーンショットをぼかす | リアルタイムではなく静止画 |
+
+URP で `RendererFeature` を使う場合は、使用中の Universal Renderer Data の **Renderer Features** に `UrsaDialogBlurRendererFeature` を追加してください。未追加、または実行されていない場合は warning を出し、`ScreenshotBlur` へフォールバックします。`ScreenshotBlur` 用 material も見つからない場合は `Dimmed` にフォールバックします。
+
+> **Screen Space - Overlay について**
+> URP の `_CameraOpaqueTexture` / `RendererFeature` はカメラが描画した結果だけを入力にします。`Screen Space - Overlay` Canvas はカメラ描画後に合成されるため、ブラー元には含まれません。Ursa が管理する Scene UI / Dialog / Transition / Tap effect は `Screen Space - Camera` 前提で扱います。
+
+> **重なったダイアログとブラー**
+> ダイアログが複数重なっている場合、最前面より下のダイアログはブラー元として描画され、最前面のバリアとダイアログはその上に描画されます。
+> これにより、2枚目以降のダイアログを開いた時に「背面のシーン + 背面のダイアログ」がぼけた背景として見える構成になります。
 
 #### 2. ダイアログクラスの定義
 
@@ -657,13 +755,13 @@ UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader
 
 ## UrsaButton
 
-`UrsaButton` は Unity の `Button` コンポーネントに連打防止・グローバルブロック・長押しを追加する UI コンポーネントです。  
+`UrsaButton` は Unity の `Button` コンポーネントに連打防止・グループブロック・長押しを追加する UI コンポーネントです。
 `Button` コンポーネントと同じ GameObject に追加して使います。
 
 ### セットアップ
 
 Prefab または GameObject に `UrsaButton` コンポーネントを追加するだけで動作します。  
-内部の `UrsaButtonLoop` はシーンロード時に自動生成されます（ヒエラルキーには表示されません）。
+同じ GameObject にある Unity 標準の `Button` と連携し、クリック処理・連打防止・長押しをまとめて扱えます。
 
 ### インターフェース（IUrsaButton）
 
@@ -732,7 +830,7 @@ public class MyButtonEffect : MonoBehaviour, IUrsaButtonAction
 ```
 
 > **Note:** `IUrsaButtonAction.Execute()` は `SetOnClick` ハンドラーより先に呼ばれます。  
-> グローバルブロック・セルフブロックは両方に同様に適用されます。
+> グループブロック・セルフブロックは両方に同様に適用されます。
 
 ### ゲート設定（連打防止）
 
@@ -747,16 +845,21 @@ _button.SetGateInterval(0f);   // 連打を許可する
 
 Inspector の **Self Block** ヘッダーからも設定できます。
 
-#### グローバルブロック
+#### グループブロック
 
-いずれかのボタンのハンドラーが実行中は、他のボタンも押せなくなります（デフォルト有効）。  
-特定のボタンをブロック対象外にしたい場合は `SetIgnoreGlobalBlock` を使います。
+同じグループに属するボタンのハンドラーが実行中は、そのグループ内の他のボタンも押せなくなります（デフォルト有効）。
+
+グループは自動判定されます。親に `UrsaButtonGroup` があればそれを使い、なければ `DialogBase` / `SceneBase` / Canvas / 自分自身の順にフォールバックします。
+Dialog と Scene はそれぞれ独立したスコープになるため、シーン側のボタンで `OpenWithCloseAsync` のようにダイアログが閉じるまで待っていても、開いたダイアログ内の OK / Cancel ボタンは別スコープとして押せます。
+
+任意の UI パネル内だけをひとまとめにしたい場合は、親 GameObject に `UrsaButtonGroup` を追加します。
 
 ```csharp
-_button.SetIgnoreGlobalBlock(true); // グローバルブロックを無視する
+_button.SetIgnoreGroupBlock(true);       // グループブロックを無視する
+_button.SetIgnoreGlobalBlock(true);      // 互換用の旧名
 ```
 
-Inspector の **Global Block** ヘッダーからも設定できます。
+Inspector の **Group Block** ヘッダーからも設定できます。
 
 ### キャンセル
 
@@ -870,7 +973,7 @@ _button.SetOnLongClickAsync(
 | 項目 | デフォルト | 説明 |
 |---|---|---|
 | Gate Interval | `0.5` | セルフブロックのインターバル（秒）。0 で無効 |
-| Ignore Global Block | `false` | true にするとグローバルブロックを無視する |
+| Ignore Group Block | `false` | true にすると同じグループのブロックを無視する |
 
 ## License
 

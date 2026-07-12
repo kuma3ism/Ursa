@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Ursa.UI;
 
 namespace Ursa
 {
@@ -8,9 +9,17 @@ namespace Ursa
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver, IUrsaButtonBlockScope where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
+
+        // ---- IUrsaButtonBlockScope ----
+        // このシーンインスタンス自体がスコープなので、シーン直下の UrsaButton 同士は
+        // このブロック状態を共有する。
+        private readonly UrsaButtonBlockState _buttonBlockState = new UrsaButtonBlockState();
+        bool IUrsaButtonBlockScope.IsBlocked(float now) => _buttonBlockState.IsBlocked(now);
+        void IUrsaButtonBlockScope.Begin() => _buttonBlockState.Begin();
+        void IUrsaButtonBlockScope.End(float now) => _buttonBlockState.End(now);
 
         /// <summary>バックキー（Escape）による自動戻り処理を有効/無効にします。</summary>
         protected void SetBackKeyEnabled(bool enabled) => _handleBackKey = enabled;
@@ -19,7 +28,33 @@ namespace Ursa
 
         private ISceneManager _sceneManager;
 
-        protected bool IsTopScene => _sceneManager?.IsTopScene(this.gameObject.scene) ?? false;
+        protected bool IsTopScene
+        {
+            get
+            {
+                EnsureSceneManager();
+                return _sceneManager?.IsTopScene(this.gameObject.scene) ?? false;
+            }
+        }
+
+        /// <summary>
+        /// _sceneManager が未注入の場合に自己解決する。
+        ///
+        /// 通常は UrsaSceneManager.PushAsync/ResetAsync/ReplaceAsync 等がロード後に
+        /// ISceneManagerReceiver.SetManager を呼んで注入するが、アプリ起動直後に
+        /// Unityが直接再生する最初のシーンはこのフローを一切通らないため、
+        /// 何もしなければ _sceneManager が永久にnullのままになり、IsTopSceneが
+        /// 常にfalseを返してEscape/ショートカット等が一切反応しなくなる。
+        /// この自己解決により、利用者側（起動スクリプト等）はこの事情を
+        /// 一切意識する必要がなくなる。
+        /// </summary>
+        private void EnsureSceneManager()
+        {
+            if (_sceneManager != null) return;
+            if (!UrsaCore.IsSceneReady) return;
+
+            _sceneManager = UrsaCore.Scene;
+        }
 
         // ---- ISceneManagerReceiver ----
 
@@ -60,8 +95,9 @@ namespace Ursa
         /// </summary>
         internal async Task OpenAsync(T parameter)
         {
+            EnsureSceneManager();
             CurrentParam = parameter;
-            await _sceneManager.PushInstanceAsync(this.gameObject.scene);
+            await _sceneManager.PushInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter), parameter: parameter);
             await OnInitializeAsync(parameter);
         }
 
@@ -71,8 +107,9 @@ namespace Ursa
         /// </summary>
         public async Task ReplaceAsync(T parameter)
         {
+            EnsureSceneManager();
             CurrentParam = parameter;
-            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene);
+            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter), parameter: parameter);
             await OnInitializeAsync(parameter);
         }
 
@@ -93,13 +130,20 @@ namespace Ursa
             unloader?.UnloadResources();
         }
 
+        private static UrsaScenePresentation GetPresentation(ISceneParameter parameter)
+        {
+            return parameter?.Presentation ?? UrsaScenePresentation.Fullscreen;
+        }
+
         /// <summary>
-        /// 現在最前面にある自分自身のシーンを破棄し、一つ前のシーンに戻ります。
+        /// 自分自身のシーンを閉じるようマネージャーへ依頼します。
+        /// Replaceされたシーンの場合、置き換え元は復帰せず置き換え履歴ごと破棄されます。
         /// </summary>
         public async Task CloseAsync()
         {
+            EnsureSceneManager();
             await OnSceneWillClose();
-            await _sceneManager.PopAsync();
+            await _sceneManager.CloseAsync(gameObject.scene);
         }
 
         public virtual void OnResumeScene() { }

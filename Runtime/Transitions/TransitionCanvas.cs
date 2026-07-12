@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using Ursa;
+using Ursa.UI;
 
 namespace Ursa.Transitions
 {
@@ -41,11 +42,10 @@ namespace Ursa.Transitions
                 return;
             }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+            UrsaDontDestroyOnLoadRoot.Attach(gameObject);
 
             var canvas = GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            UrsaUICanvasUtility.ConfigureTransitionCanvas(canvas);
 
             _canvasGroup = GetComponent<CanvasGroup>();
             _canvasGroup.alpha = 0f;
@@ -74,6 +74,15 @@ namespace Ursa.Transitions
         public void ApplyEffect(TransitionEffectBase effect)
         {
             _directEffect = effect;
+        }
+
+        public float MinimumCoveredDuration
+        {
+            get
+            {
+                var effect = _directEffect != null ? _directEffect : _controller?.Effect;
+                return effect != null ? effect.MinimumCoveredDuration : 0f;
+            }
         }
 
         public async Task PlayOutAsync()

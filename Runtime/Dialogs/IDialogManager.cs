@@ -20,7 +20,11 @@ namespace Ursa
         /// <summary>ダイアログの配置先。デフォルトは Scene。</summary>
         DialogPlacement Placement => DialogPlacement.Scene;
 
-        /// <summary>バリアの表示スタイル。デフォルトは Dimmed（黒半透明）。</summary>
+        /// <summary>
+        /// バリアの表示スタイル。
+        /// Dimmed は「未指定」として扱われ、UrsaDialogManager.DefaultBarrierStyle が適用されます。
+        /// 個別ダイアログで確実に指定できるのは None / RealtimeBlur / ScreenshotBlur です。
+        /// </summary>
         BarrierStyle BarrierStyle => BarrierStyle.Dimmed;
     }
 
@@ -41,8 +45,51 @@ namespace Ursa
     {
         /// <summary>バリアを表示しません。</summary>
         None,
-        /// <summary>半透明の黒いバリアを表示します（デフォルト）。</summary>
+        /// <summary>
+        /// 黒半透明のバリアを表示します。
+        /// IDialogParameter.BarrierStyle では「未指定」として扱われ、DefaultBarrierStyle が適用されます。
+        /// </summary>
         Dimmed,
+        /// <summary>GrabPass を使ったリアルタイムブラーを表示します。UrsaDialogManager.BarrierMaterial の設定が必要です。</summary>
+        RealtimeBlur,
+        /// <summary>画面キャプチャをぼかして表示します。処理負荷が高い場合があります。</summary>
+        ScreenshotBlur,
+    }
+
+    /// <summary>
+    /// RealtimeBlur の実装方式を指定します。
+    /// BarrierStyle は見た目の意図、RealtimeBlurMode は実装・品質方針を表します。
+    /// </summary>
+    public enum RealtimeBlurMode
+    {
+        /// <summary>
+        /// 環境に応じて UrsaDialogManager が方式を選択します。
+        /// Built-in RP → LegacyGrabPass、URP → RendererFeature。
+        /// </summary>
+        Auto,
+
+        /// <summary>Built-in Render Pipeline 向けの GrabPass ベース実装を使用します。</summary>
+        LegacyGrabPass,
+
+        /// <summary>
+        /// URP の _CameraOpaqueTexture を使った実装を使用します。
+        /// URP Asset または Camera 設定で Opaque Texture を有効にする必要があります。
+        /// </summary>
+        CameraOpaqueTexture,
+
+        /// <summary>
+        /// URP の ScriptableRendererFeature でコピーしたカメラカラーを使用します。
+        /// 使用する Universal Renderer Data に UrsaDialogBlurRendererFeature を追加する必要があります。
+        /// </summary>
+        RendererFeature,
+
+        /// <summary>
+        /// リアルタイムブラーが使えない環境向けのフォールバック。
+        /// BarrierStyle.ScreenshotBlur と同じ処理を行います。
+        /// RealtimeBlur を優先しつつ、RendererFeature などの実行条件を満たせない場合に
+        /// ScreenshotBlur へ切り替えたいときに使用します。
+        /// </summary>
+        ScreenshotFallback,
     }
 
     /// <summary>

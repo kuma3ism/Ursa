@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 using Ursa.Transitions;
+using Ursa.UI;
 
 namespace Ursa.Editor
 {
@@ -11,6 +12,8 @@ namespace Ursa.Editor
     /// </summary>
     public static class TransitionPrefabCreator
     {
+        private const float DefaultMinimumCoveredDuration = 2f;
+
         [MenuItem("Ursa/Create Transition Prefabs")]
         public static void CreateTransitionPrefabs()
         {
@@ -44,7 +47,8 @@ namespace Ursa.Editor
             var go = new GameObject("FadeTransitionEffect");
             var canvas = go.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.overrideSorting = true;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             var rt = go.GetComponent<RectTransform>();
@@ -66,6 +70,7 @@ namespace Ursa.Editor
             var fade = go.AddComponent<FadeTransitionEffect>();
             // SerializedObjectでCanvasGroupをアサイン
             var so = new SerializedObject(fade);
+            so.FindProperty("_minimumCoveredDuration").floatValue = DefaultMinimumCoveredDuration;
             so.FindProperty("_canvasGroup").objectReferenceValue = cg;
             so.ApplyModifiedProperties();
 
@@ -159,7 +164,8 @@ namespace Ursa.Editor
             var go = new GameObject(prefabName);
             var canvas = go.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.overrideSorting = true;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             go.GetComponent<RectTransform>().localScale = Vector3.one;
@@ -198,6 +204,7 @@ namespace Ursa.Editor
 
             var effect = go.AddComponent<AnimatorTransitionEffect>();
             var so = new SerializedObject(effect);
+            so.FindProperty("_minimumCoveredDuration").floatValue = DefaultMinimumCoveredDuration;
             so.FindProperty("_animator").objectReferenceValue = animator;
             so.ApplyModifiedProperties();
 
@@ -224,7 +231,8 @@ namespace Ursa.Editor
             var go = new GameObject(name);
             var canvas = go.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 9999;
+            canvas.sortingOrder = UrsaUIRenderOrder.Transition;
+            canvas.overrideSorting = true;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             go.GetComponent<RectTransform>().localScale = Vector3.one;
@@ -243,6 +251,7 @@ namespace Ursa.Editor
             // ShaderTransitionEffect にマテリアルをアサイン
             var effect = go.AddComponent<ShaderTransitionEffect>();
             var so = new SerializedObject(effect);
+            so.FindProperty("_minimumCoveredDuration").floatValue = DefaultMinimumCoveredDuration;
             so.FindProperty("_material").objectReferenceValue = savedMat;
             so.ApplyModifiedProperties();
 

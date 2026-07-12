@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using Ursa.Transitions;
 
@@ -38,7 +39,12 @@ namespace Ursa
                 }
 
                 // 未登録のデフォルトトランジションを補完する
-                if (_instance.SetupDefaultTransitions())
+                bool dirty = _instance.SetupDefaultTransitions();
+
+                // デフォルトダイアログバリアマテリアルを生成
+                dirty |= _instance.SetupDefaultDialogMaterials();
+
+                if (dirty)
                 {
                     UnityEditor.EditorUtility.SetDirty(_instance);
                     UnityEditor.AssetDatabase.SaveAssets();
@@ -102,6 +108,94 @@ namespace Ursa
             }
             return dirty;
         }
+
+        /// <summary>
+        /// デフォルトのダイアログバリア用マテリアルを生成します。
+        /// 既に存在する場合は上書きしません。
+        /// </summary>
+        /// <returns>1件以上作成された場合は true。</returns>
+        private bool SetupDefaultDialogMaterials()
+        {
+            string dir = "Assets/Resources/Ursa";
+            if (!System.IO.Directory.Exists(dir))
+            {
+                System.IO.Directory.CreateDirectory(dir);
+                UnityEditor.AssetDatabase.Refresh();
+            }
+
+            bool dirty = false;
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaRealtimeBlur.mat",
+                "Ursa/UI/DialogBlur",
+                "UrsaDialogBlur.shader",
+                "_BlurSize", 4.0f);
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaCameraOpaqueTextureBlur.mat",
+                "Ursa/UI/CameraOpaqueTextureBlur",
+                "UrsaCameraOpaqueTextureBlur.shader",
+                "_BlurSize", 4.0f);
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaRendererFeatureBlur.mat",
+                "Ursa/UI/RendererFeatureBlur",
+                "UrsaRendererFeatureBlur.shader",
+                "_BlurSize", 4.0f);
+
+            dirty |= CreateDialogMaterialIfNeeded(
+                $"{dir}/UrsaScreenshotBlur.mat",
+                "Ursa/UI/ScreenshotBlur",
+                "UrsaScreenshotBlur.shader",
+                "_BlurSize", 2.0f);
+
+            return dirty;
+        }
+
+        /// <summary>
+        /// 指定パスにマテリアルが存在しなければ、指定シェーダーから新規作成します。
+        /// </summary>
+        private bool CreateDialogMaterialIfNeeded(string materialPath, string shaderName, string shaderFileName, string blurSizeProperty, float defaultBlurSize)
+        {
+            if (UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null)
+                return false;
+
+            var shader = ResolveDialogShader(shaderName, shaderFileName);
+            if (shader == null)
+            {
+                Debug.LogWarning($"[Ursa] ダイアログバリア用シェーダーが見つかりません: {shaderName} ({shaderFileName})");
+                return false;
+            }
+
+            var material = new Material(shader);
+            if (material.HasProperty(blurSizeProperty))
+                material.SetFloat(blurSizeProperty, defaultBlurSize);
+
+            UnityEditor.AssetDatabase.CreateAsset(material, materialPath);
+            Debug.Log($"[Ursa] Created default dialog barrier material: {materialPath}");
+            return true;
+        }
+
+        private Shader ResolveDialogShader(string shaderName, string shaderFileName)
+        {
+            var shader = Shader.Find(shaderName);
+            if (shader != null)
+                return shader;
+
+            var guids = UnityEditor.AssetDatabase.FindAssets($"{Path.GetFileNameWithoutExtension(shaderFileName)} t:Shader");
+            foreach (var guid in guids)
+            {
+                var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                if (Path.GetFileName(path) != shaderFileName)
+                    continue;
+
+                shader = UnityEditor.AssetDatabase.LoadAssetAtPath<Shader>(path);
+                if (shader != null && shader.name == shaderName)
+                    return shader;
+            }
+
+            return null;
+        }
 #endif
 
         // ==========================================
@@ -109,6 +203,10 @@ namespace Ursa
         // ==========================================
 
         [Header("シーン遷移（Transitions）")]
+        [Tooltip("Scene API で transitionName を省略した時に使うトランジション名。空にすると未指定時はトランジションなしになります。")]
+        [SerializeField]
+        public string DefaultSceneTransitionName = TransitionType.Fade;
+
         [SerializeField]
         public List<TransitionEntry> Transitions = new List<TransitionEntry>();
 
@@ -132,6 +230,16 @@ namespace Ursa
                 if (entry.Name == name) return entry.Prefab;
             }
             return null;
+        }
+
+        public string ResolveSceneTransitionName(string transitionName)
+        {
+            if (!string.Equals(transitionName, TransitionType.Default, StringComparison.Ordinal))
+                return transitionName;
+
+            return string.IsNullOrEmpty(DefaultSceneTransitionName)
+                ? null
+                : DefaultSceneTransitionName;
         }
     }
 }

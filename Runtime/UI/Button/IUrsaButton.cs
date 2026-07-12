@@ -27,7 +27,10 @@ namespace Ursa.UI
         /// <summary>このボタンの連打防止インターバル（秒）を設定します。</summary>
         void SetGateInterval(float seconds);
 
-        /// <summary>グローバルボタンブロックを無視するかどうかを設定します。</summary>
+        /// <summary>グループボタンブロックを無視するかどうかを設定します。</summary>
+        void SetIgnoreGroupBlock(bool ignore);
+
+        /// <summary>グループボタンブロックを無視するかどうかを設定します。互換用の旧名です。</summary>
         void SetIgnoreGlobalBlock(bool ignore);
 
         /// <summary>非同期の長押し（ロングクリック）ハンドラーを登録します。</summary>
