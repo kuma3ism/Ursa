@@ -128,7 +128,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 66c6389b897e44e04942ea67c38eb645, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ursa.Runtime::Ursa.Transitions.FadeTransitionEffect
-  _minimumCoveredDuration: 2
+  _minimumCoveredDuration: 1
   _canvasGroup: {fileID: 8849784730188971294}
   _outDuration: 0.3
   _inDuration: 0.3

@@ -155,8 +155,24 @@ namespace Ursa.Dialogs
             if (!_handleBackKey) return;
             if (UrsaCore.Dialog?.IsTransitioning == true) return;
             if (!UrsaCore.Dialog.IsTopDialog(this)) return;
+            if (!IsVisibleInEnabledCanvas()) return;
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 _ = OnBackKeyPressed();
+        }
+
+        private bool IsVisibleInEnabledCanvas()
+        {
+            if (!gameObject.activeInHierarchy) return false;
+
+            var canvases = GetComponentsInParent<Canvas>(true);
+            foreach (var canvas in canvases)
+            {
+                if (canvas == null) continue;
+                if (!canvas.enabled || !canvas.gameObject.activeInHierarchy)
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>

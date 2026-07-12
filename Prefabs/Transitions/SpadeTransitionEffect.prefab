@@ -302,7 +302,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a824254634104b4181b061dd9a7136c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ursa.Runtime::Ursa.Transitions.AnimatorTransitionEffect
-  _minimumCoveredDuration: 2
+  _minimumCoveredDuration: 1
   _animator: {fileID: 5194577056603762527}
   _outState: Out
   _inState: In

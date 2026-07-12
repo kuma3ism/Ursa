@@ -190,7 +190,7 @@ public class MyScene : SceneBase<MySceneParameter>
 ## シーン遷移 API
 
 すべての操作は `UrsaCore.Scene` 経由で行います。  
-`transitionName` を省略するとデフォルトで **Fade** が使用されます。
+`transitionName` を省略すると `UrsaSettings.DefaultSceneTransitionName` が使用されます（初期値は **Fade**）。
 
 ### Push（重ねる）
 
@@ -198,7 +198,7 @@ public class MyScene : SceneBase<MySceneParameter>
 await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter());
 
 // トランジションを指定する場合
-await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter(), TransitionType.Dissolve);
+await UrsaCore.Scene.PushAsync<NextScene>(new NextSceneParameter(), TransitionType.Wipe);
 ```
 
 ### Pop（戻る）
@@ -349,12 +349,13 @@ protected override async Task OnInitializeAsync(MyParameter parameter)
 ## トランジション
 
 シーン遷移時にフェードなどの演出を挟むことができます。  
-デフォルトは **Fade** です。トランジションなしで遷移したい場合は `null` を渡してください。
+デフォルトは `UrsaSettings.DefaultSceneTransitionName` で変更できます（初期値は **Fade**）。
+トランジションなしで遷移したい場合は `null` または空文字を渡してください。
 
 ```csharp
-await UrsaCore.Scene.PushAsync<NextScene>(param);                      // Fade（デフォルト）
-await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Spade); // Spade
-await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // トランジションなし
+await UrsaCore.Scene.PushAsync<NextScene>(param);                         // Settings のデフォルト
+await UrsaCore.Scene.PushAsync<NextScene>(param, TransitionType.Spade);    // Spade
+await UrsaCore.Scene.PushAsync<NextScene>(param, null);                    // トランジションなし
 ```
 
 ### 組み込みトランジション名
@@ -363,7 +364,8 @@ await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // ト�
 
 | 定数 | 文字列値 | 演出 |
 |---|---|---|
-| `TransitionType.Fade` | `"Fade"` | 画面全体がじわっと黒くなる（デフォルト） |
+| `TransitionType.Default` | `"__UrsaDefault"` | `UrsaSettings.DefaultSceneTransitionName` を使う |
+| `TransitionType.Fade` | `"Fade"` | 画面全体がじわっと黒くなる |
 | `TransitionType.Wipe` | `"Wipe"` | 左から右に黒が流れる |
 | `TransitionType.Circle` | `"Circle"` | 中心から黒い円が広がる |
 | `TransitionType.Spade` | `"Spade"` | スペードが中央から拡大・縮小する（Animator） |
@@ -371,6 +373,7 @@ await UrsaCore.Scene.PushAsync<NextScene>(param, null);                 // ト�
 ### UrsaSettings
 
 `Assets/Resources/Ursa/UrsaSettings.asset` でトランジション名とプレハブのマッピングを管理しています。  
+`DefaultSceneTransitionName` で Scene API の省略時トランジションを設定できます。
 エディター初回起動時に同梱プレハブが自動登録されます。独自のトランジションを追加する場合は Inspector から直接登録できます。
 
 ### シーン固有のトランジション（TransitionController）
@@ -412,7 +415,10 @@ Minimum Covered Duration に満たなければ差分だけ待機
 PlayInAsync
 ```
 
-本処理にかかった時間も含めて計算されます。たとえば `Minimum Covered Duration = 2.0` でシーンロードが `0.7` 秒なら、追加待機は約 `1.3` 秒です。ロードが `2.2` 秒かかった場合は追加待機しません。
+本処理にかかった時間も含めて計算されます。たとえば `Minimum Covered Duration = 1.0` でシーンロードが `0.3` 秒なら、追加待機は約 `0.7` 秒です。ロードが `1.2` 秒かかった場合は追加待機しません。
+
+この値はトランジションPrefabごとに保持します。Fade / Wipe / Circle / Spade など、演出ごとに必要な余韻を個別に調整できるためです。
+プロジェクト全体で一括管理したい場合は、将来的に `UrsaSettings` 側へグローバル既定値を追加し、Prefab側が未指定の時だけ参照する設計も検討できます。
 
 ### Prefab の再生成（開発者向け）
 
@@ -535,7 +541,9 @@ public class ConfirmDialogParameter : IDialogParameter
 | `Scene` | 現在のシーン配下の `[UrsaSceneDialogRoot]` | そのシーンに紐付く確認・通知。シーン破棄時に一緒に消える |
 | `DontDestroyOnLoad` | DontDestroyOnLoad の `[UrsaDialogRoot]` | シーンをまたいで残したいシステム通知、通信エラー、強制メンテナンス表示など |
 
-`Scene` 配置のダイアログは、所有シーンがUnloadされた時に履歴からも取り除かれます。
+`Scene` 配置のダイアログは、Ursa の履歴スタックで現在最前面のシーンに所属します。
+Fullscreen のシーンに覆われている間は非表示になり、所有シーンが再び最前面に戻ると復帰します。
+所有シーンがUnloadされた時は履歴からも取り除かれます。
 シーン遷移をまたいでも残したいダイアログは `DontDestroyOnLoad` を指定してください。
 
 ### リアルタイムブラー

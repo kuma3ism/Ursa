@@ -115,7 +115,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a852dc2a316c4bba8060a4b8a214f4b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ursa.Runtime::Ursa.Transitions.ShaderTransitionEffect
-  _minimumCoveredDuration: 2
+  _minimumCoveredDuration: 1
   _material: {fileID: 2100000, guid: de0bd052d79264f2cafe12509cca239c, type: 2}
   _property: _Progress
   _outDuration: 0.3

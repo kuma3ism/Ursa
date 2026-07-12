@@ -203,6 +203,10 @@ namespace Ursa
         // ==========================================
 
         [Header("シーン遷移（Transitions）")]
+        [Tooltip("Scene API で transitionName を省略した時に使うトランジション名。空にすると未指定時はトランジションなしになります。")]
+        [SerializeField]
+        public string DefaultSceneTransitionName = TransitionType.Fade;
+
         [SerializeField]
         public List<TransitionEntry> Transitions = new List<TransitionEntry>();
 
@@ -226,6 +230,16 @@ namespace Ursa
                 if (entry.Name == name) return entry.Prefab;
             }
             return null;
+        }
+
+        public string ResolveSceneTransitionName(string transitionName)
+        {
+            if (!string.Equals(transitionName, TransitionType.Default, StringComparison.Ordinal))
+                return transitionName;
+
+            return string.IsNullOrEmpty(DefaultSceneTransitionName)
+                ? null
+                : DefaultSceneTransitionName;
         }
     }
 }

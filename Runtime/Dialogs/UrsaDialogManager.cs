@@ -754,9 +754,22 @@ namespace Ursa.Dialogs
             {
                 if (_defaultParent != null)
                     return _defaultParent;
-                return GetOrCreateSceneDialogRoot(SceneManager.GetActiveScene());
+                return GetOrCreateSceneDialogRoot(GetCurrentUrsaScene());
             }
             return GetOrCreateDdolRoot();
+        }
+
+        private Scene GetCurrentUrsaScene()
+        {
+            var sceneManager = UrsaCore.Scene;
+            if (sceneManager != null)
+            {
+                var scene = sceneManager.CurrentScene;
+                if (scene.IsValid() && scene.isLoaded)
+                    return scene;
+            }
+
+            return SceneManager.GetActiveScene();
         }
 
         private RectTransform GetOrCreateSceneDialogRoot(Scene scene)

@@ -62,17 +62,28 @@ namespace Ursa
         /// <inheritdoc />
         public IReadOnlyList<ISceneHistoryEntry> History => _history;
 
-        private async Task ExecuteTransitionAsync(Func<Task> action, string transitionName = TransitionType.Fade)
+        public Scene CurrentScene
+        {
+            get
+            {
+                RegisterInitialSceneIfNeeded();
+                return _history.Count > 0 ? _history[_history.Count - 1].Scene : SceneManager.GetActiveScene();
+            }
+        }
+
+        private async Task ExecuteTransitionAsync(Func<Task> action, string transitionName = TransitionType.Default)
         {
             TransitionEffectBase manualEffect = null;
             bool shouldDestroyEffect = false;
+            var resolvedTransitionName = ResolveTransitionName(transitionName);
+            bool transitionEnabled = !string.IsNullOrEmpty(resolvedTransitionName);
 
-            if (!string.IsNullOrEmpty(transitionName))
+            if (transitionEnabled)
             {
                 var settings = UrsaCore.Settings;
                 if (settings != null)
                 {
-                    var prefab = settings.GetTransitionPrefab(transitionName);
+                    var prefab = settings.GetTransitionPrefab(resolvedTransitionName);
                     if (prefab != null)
                     {
                         manualEffect = UnityEngine.Object.Instantiate(prefab);
@@ -92,7 +103,7 @@ namespace Ursa
             }
             else
             {
-                var controller = GetActiveController();
+                var controller = transitionEnabled ? GetActiveController() : null;
                 canvas.ApplyController(controller);
             }
 
@@ -125,6 +136,17 @@ namespace Ursa
                 await Task.Yield();
         }
 
+        private static string ResolveTransitionName(string transitionName)
+        {
+            var settings = UrsaCore.Settings;
+            if (settings != null)
+                return settings.ResolveSceneTransitionName(transitionName);
+
+            return string.Equals(transitionName, TransitionType.Default, StringComparison.Ordinal)
+                ? TransitionType.Fade
+                : transitionName;
+        }
+
         // 現在最前面のシーンから TransitionController を取得（なければ null）
         private TransitionController GetActiveController()
         {
@@ -151,7 +173,7 @@ namespace Ursa
         /// <summary>
         /// 全履歴を捨てて、新しいシーンへ遷移 (Single)
         /// </summary>
-        public async Task ResetAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Fade) where TScene : MonoBehaviour
+        public async Task ResetAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -167,7 +189,7 @@ namespace Ursa
         /// 現在のシーンの上に重ねる (Additive)
         /// パラメーターの IsHistory が false の場合、履歴には積まれません。
         /// </summary>
-        public async Task PushAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Fade) where TScene : MonoBehaviour
+        public async Task PushAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -175,7 +197,7 @@ namespace Ursa
                 return;
             }
 
-            if (_history.Count == 0) RegisterInitialScene();
+            RegisterInitialSceneIfNeeded();
             NotifyPauseScene();
             await InternalLoad(typeof(TScene).Name, typeof(TScene), parameter, LoadSceneMode.Additive, transitionName);
         }
@@ -183,7 +205,7 @@ namespace Ursa
         /// <summary>
         /// 現在の最前面シーンを捨てて、新しいシーンに入れ替える
         /// </summary>
-        public async Task ReplaceAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Fade) where TScene : MonoBehaviour
+        public async Task ReplaceAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -191,11 +213,33 @@ namespace Ursa
                 return;
             }
 
+            RegisterInitialSceneIfNeeded();
             await ExecuteTransitionAsync(async () =>
             {
-                // 1. 今の一番上を取り出す
-                if (_history.Count > 0)
+                // ルートシーンの差し替えはUnity標準のSingleロードを使う。
+                // 履歴がある場合は一つ前へ戻れるよう、Additiveで新シーンを読み込んでから最前面だけを外す。
+                bool replacingRootScene = _history.Count == 1;
+                string sceneName = typeof(TScene).Name;
+                Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(
+                    sceneName,
+                    replacingRootScene ? LoadSceneMode.Single : LoadSceneMode.Additive);
+                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
+
+                await Task.WhenAll(sceneLoadTask, resourceLoadTask);
+                Scene newlyLoadedScene = await sceneLoadTask;
+                if (!newlyLoadedScene.IsValid())
+                    return;
+
+                if (newlyLoadedScene.isLoaded)
+                    SceneManager.SetActiveScene(newlyLoadedScene);
+
+                if (replacingRootScene)
                 {
+                    _history.Clear();
+                }
+                else if (_history.Count > 0)
+                {
+                    // 読み込みに成功した後で、今の一番上を取り出す。
                     var oldEntry = _history[_history.Count - 1];
                     _history.RemoveAt(_history.Count - 1);
                     if (oldEntry.Scene.IsValid() && oldEntry.Scene.isLoaded)
@@ -205,15 +249,7 @@ namespace Ursa
                     }
                 }
 
-                // 2. 新しいシーンをロードする
-                string sceneName = typeof(TScene).Name;
-                Task<Scene> sceneLoadTask = _sceneLoader.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-                Task resourceLoadTask = (parameter as ISceneResourcePreloader)?.PreloadResourcesAsync(null) ?? Task.CompletedTask;
-
-                await Task.WhenAll(sceneLoadTask, resourceLoadTask);
-                Scene newlyLoadedScene = await sceneLoadTask;
-
-                // 3. 新しいシーンを登録する（IsHistory に関わらずReplaceは必ず履歴に入る）
+                // 新しいシーンを登録する（IsHistory に関わらずReplaceは必ず履歴に入る）
                 if (newlyLoadedScene.IsValid())
                     PushHistory(newlyLoadedScene, typeof(TScene), GetPresentation(parameter));
 
@@ -226,7 +262,7 @@ namespace Ursa
         /// <summary>
         /// 一つ前のシーンに戻る
         /// </summary>
-        public async Task PopAsync(string transitionName = TransitionType.Fade)
+        public async Task PopAsync(string transitionName = TransitionType.Default)
         {
             if (_isTransitioning || _history.Count <= 1)
             {
@@ -252,7 +288,7 @@ namespace Ursa
         /// 履歴内で最も直近にある TScene 型のシーンまで一気にPopします。
         /// 対象が見つからない場合は InvalidOperationException をスローします。
         /// </summary>
-        public async Task JumpToAsync<TScene>(string transitionName = TransitionType.Fade) where TScene : MonoBehaviour
+        public async Task JumpToAsync<TScene>(string transitionName = TransitionType.Default) where TScene : MonoBehaviour
         {
             var targetType = typeof(TScene);
 
@@ -278,7 +314,7 @@ namespace Ursa
         /// 指定インデックスのシーンまで一気にPopします（インデックス0が最も古い）。
         /// 範囲外の場合は ArgumentOutOfRangeException をスローします。
         /// </summary>
-        public async Task JumpToIndexAsync(int index, string transitionName = TransitionType.Fade)
+        public async Task JumpToIndexAsync(int index, string transitionName = TransitionType.Default)
         {
             if (index < 0 || index >= _history.Count)
                 throw new ArgumentOutOfRangeException(nameof(index),
@@ -308,7 +344,7 @@ namespace Ursa
             }, transitionName);
         }
 
-        private async Task InternalLoad(string sceneName, Type sceneType, ISceneParameter parameter, LoadSceneMode mode, string transitionName = TransitionType.Fade)
+        private async Task InternalLoad(string sceneName, Type sceneType, ISceneParameter parameter, LoadSceneMode mode, string transitionName = TransitionType.Default)
         {
             await ExecuteTransitionAsync(async () =>
             {
@@ -362,12 +398,15 @@ namespace Ursa
                 _history[i].Index = i;
         }
 
-        private void RegisterInitialScene()
+        private void RegisterInitialSceneIfNeeded()
         {
-            if (_history.Count > 0) return;
+            if (_history.Count > 0 || _isTransitioning) return;
 
             Scene active = SceneManager.GetActiveScene();
+            if (!active.IsValid() || !active.isLoaded) return;
+
             PushHistory(active, ResolveSceneType(active));
+            InjectSceneManager(active);
             SyncSceneCanvases();
             _logger.Log($"<color=cyan>[Ursa]</color> Initial scene '{active.name}' registered (Handle: {active.handle})");
         }
@@ -656,7 +695,9 @@ namespace Ursa
 
         public bool IsTopScene(Scene scene)
         {
-            if (_history.Count == 0) RegisterInitialScene();
+            RegisterInitialSceneIfNeeded();
+            if (_history.Count == 0)
+                return SceneManager.GetActiveScene().handle == scene.handle;
             return _history[_history.Count - 1].Scene.handle == scene.handle;
         }
 
@@ -664,7 +705,7 @@ namespace Ursa
         /// 指定したシーンをロード（Additive）し、対象となるTSceneコンポーネントのインスタンスを検索して返します。
         /// ロードされた時点では履歴スタックへの追加はまだ行われません。
         /// </summary>
-        public async Task<TScene> CreateSceneAsync<TScene>(ISceneParameter parameter = null, string transitionName = TransitionType.Fade) where TScene : MonoBehaviour
+        public async Task<TScene> CreateSceneAsync<TScene>(ISceneParameter parameter = null, string transitionName = TransitionType.Default) where TScene : MonoBehaviour
         {
             if (_isTransitioning)
             {
@@ -691,6 +732,7 @@ namespace Ursa
                     return;
                 }
 
+                InjectSceneManager(newlyLoadedScene);
                 SyncSceneCanvasesForTransientScene(newlyLoadedScene, UrsaScenePresentation.Overlay);
                 newlyLoadedScene.GetRootGameObjects(_rootGameObjectBuffer);
                 foreach (var go in _rootGameObjectBuffer)
@@ -714,7 +756,7 @@ namespace Ursa
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の履歴（スタック）の最前面にPush（追加）します。
         /// </summary>
-        public Task PushInstanceAsync(Scene scene, string transitionName = TransitionType.Fade, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen)
+        public Task PushInstanceAsync(Scene scene, string transitionName = TransitionType.Default, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen)
         {
             if (_isTransitioning)
             {
@@ -722,10 +764,13 @@ namespace Ursa
                 return Task.CompletedTask;
             }
 
-            if (!string.IsNullOrEmpty(transitionName))
+            if (!string.IsNullOrEmpty(transitionName) &&
+                !string.Equals(transitionName, TransitionType.Default, StringComparison.Ordinal))
+            {
                 _logger.LogWarning("[Ursa] PushInstanceAsync はトランジション演出に未対応です。transitionName は無視されます。");
+            }
 
-            if (_history.Count == 0) RegisterInitialScene();
+            RegisterInitialSceneIfNeeded();
             NotifyPauseScene();
             PushHistory(scene, ResolveSceneType(scene), presentation);
             InjectSceneManager(scene);
@@ -736,7 +781,7 @@ namespace Ursa
         /// <summary>
         /// 既にロード済みのシーンインスタンスを、現在の最前面のシーンと入れ替え（Replace）て履歴を更新します。
         /// </summary>
-        public async Task ReplaceInstanceAsync(Scene scene, string transitionName = TransitionType.Fade, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen)
+        public async Task ReplaceInstanceAsync(Scene scene, string transitionName = TransitionType.Default, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen)
         {
             if (_isTransitioning)
             {
@@ -744,8 +789,12 @@ namespace Ursa
                 return;
             }
 
+            RegisterInitialSceneIfNeeded();
             await ExecuteTransitionAsync(async () =>
             {
+                if (scene.IsValid() && scene.isLoaded)
+                    SceneManager.SetActiveScene(scene);
+
                 if (_history.Count > 0)
                 {
                     var oldEntry = _history[_history.Count - 1];

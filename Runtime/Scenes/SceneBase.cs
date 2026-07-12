@@ -28,7 +28,33 @@ namespace Ursa
 
         private ISceneManager _sceneManager;
 
-        protected bool IsTopScene => _sceneManager?.IsTopScene(this.gameObject.scene) ?? false;
+        protected bool IsTopScene
+        {
+            get
+            {
+                EnsureSceneManager();
+                return _sceneManager?.IsTopScene(this.gameObject.scene) ?? false;
+            }
+        }
+
+        /// <summary>
+        /// _sceneManager が未注入の場合に自己解決する。
+        ///
+        /// 通常は UrsaSceneManager.PushAsync/ResetAsync/ReplaceAsync 等がロード後に
+        /// ISceneManagerReceiver.SetManager を呼んで注入するが、アプリ起動直後に
+        /// Unityが直接再生する最初のシーンはこのフローを一切通らないため、
+        /// 何もしなければ _sceneManager が永久にnullのままになり、IsTopSceneが
+        /// 常にfalseを返してEscape/ショートカット等が一切反応しなくなる。
+        /// この自己解決により、利用者側（起動スクリプト等）はこの事情を
+        /// 一切意識する必要がなくなる。
+        /// </summary>
+        private void EnsureSceneManager()
+        {
+            if (_sceneManager != null) return;
+            if (!UrsaCore.IsSceneReady) return;
+
+            _sceneManager = UrsaCore.Scene;
+        }
 
         // ---- ISceneManagerReceiver ----
 
@@ -69,6 +95,7 @@ namespace Ursa
         /// </summary>
         internal async Task OpenAsync(T parameter)
         {
+            EnsureSceneManager();
             CurrentParam = parameter;
             await _sceneManager.PushInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter));
             await OnInitializeAsync(parameter);
@@ -80,6 +107,7 @@ namespace Ursa
         /// </summary>
         public async Task ReplaceAsync(T parameter)
         {
+            EnsureSceneManager();
             CurrentParam = parameter;
             await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter));
             await OnInitializeAsync(parameter);
@@ -112,6 +140,7 @@ namespace Ursa
         /// </summary>
         public async Task CloseAsync()
         {
+            EnsureSceneManager();
             await OnSceneWillClose();
             await _sceneManager.PopAsync();
         }

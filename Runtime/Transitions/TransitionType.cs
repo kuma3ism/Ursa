@@ -5,6 +5,7 @@ namespace Ursa
     /// </summary>
     public static class TransitionType
     {
+        public const string Default  = "__UrsaDefault";
         public const string Fade     = "Fade";
         public const string Wipe     = "Wipe";
         public const string Circle   = "Circle";
