@@ -97,7 +97,7 @@ namespace Ursa
         {
             EnsureSceneManager();
             CurrentParam = parameter;
-            await _sceneManager.PushInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter));
+            await _sceneManager.PushInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter), parameter: parameter);
             await OnInitializeAsync(parameter);
         }
 
@@ -109,7 +109,7 @@ namespace Ursa
         {
             EnsureSceneManager();
             CurrentParam = parameter;
-            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter));
+            await _sceneManager.ReplaceInstanceAsync(this.gameObject.scene, presentation: GetPresentation(parameter), parameter: parameter);
             await OnInitializeAsync(parameter);
         }
 
@@ -136,13 +136,14 @@ namespace Ursa
         }
 
         /// <summary>
-        /// 現在最前面にある自分自身のシーンを破棄し、一つ前のシーンに戻ります。
+        /// 自分自身のシーンを閉じるようマネージャーへ依頼します。
+        /// Replaceされたシーンの場合、置き換え元は復帰せず置き換え履歴ごと破棄されます。
         /// </summary>
         public async Task CloseAsync()
         {
             EnsureSceneManager();
             await OnSceneWillClose();
-            await _sceneManager.PopAsync();
+            await _sceneManager.CloseAsync(gameObject.scene);
         }
 
         public virtual void OnResumeScene() { }

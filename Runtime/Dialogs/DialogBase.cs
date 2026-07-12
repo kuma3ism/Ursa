@@ -153,6 +153,7 @@ namespace Ursa.Dialogs
         private void LateUpdate()
         {
             if (!_handleBackKey) return;
+            if (!UrsaCore.IsDialogReady) return;
             if (UrsaCore.Dialog?.IsTransitioning == true) return;
             if (!UrsaCore.Dialog.IsTopDialog(this)) return;
             if (!IsVisibleInEnabledCanvas()) return;

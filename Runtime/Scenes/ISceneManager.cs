@@ -24,11 +24,25 @@ namespace Ursa
 
         /// <summary>
         /// 履歴スタックの一番上にある最前面のシーンを破棄し、一つ前のシーンに戻ります。
+        /// Pushされたシーンなら閉じ、Replaceされたシーンなら置き換え元を復帰します。
         /// </summary>
         Task PopAsync(string transitionName = TransitionType.Default);
 
         /// <summary>
-        /// 現在の最前面のシーンを破棄し、同じ階層に新しいシーンをロードして履歴を入れ替えます。
+        /// 現在の最前面シーンを閉じます。
+        /// Replaceされたシーンなら置き換え元を復帰せず、置き換え履歴ごと破棄します。
+        /// </summary>
+        Task CloseAsync(string transitionName = TransitionType.Default);
+
+        /// <summary>
+        /// 指定されたシーンからの「自分を閉じる」要求を処理します。
+        /// Replaceされたシーンなら置き換え元を復帰せず、置き換え履歴ごと破棄します。
+        /// </summary>
+        Task CloseAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Default);
+
+        /// <summary>
+        /// 現在の最前面シーンを置き換え元として保持し、新しいシーンを差し替え表示します。
+        /// ルートシーンだけは戻り先がないため、履歴ごと置き換えます。
         /// </summary>
         Task ReplaceAsync<TScene>(ISceneParameter parameter, string transitionName = TransitionType.Default) where TScene : MonoBehaviour;
 
@@ -52,12 +66,13 @@ namespace Ursa
         /// <summary>
         /// 既にロード済みのシーンのインスタンスを、現在のシーンの上に重ねて履歴に追加します。
         /// </summary>
-        Task PushInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Default, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen);
+        Task PushInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Default, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen, ISceneParameter parameter = null);
 
         /// <summary>
-        /// 既にロード済みのシーンのインスタンスを、現在の最前面のシーンと入れ替えて履歴を更新します。
+        /// 既にロード済みのシーンのインスタンスを、現在の最前面シーンを置き換え元として保持したまま差し替え表示します。
+        /// ルートシーンだけは戻り先がないため、履歴ごと置き換えます。
         /// </summary>
-        Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Default, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen);
+        Task ReplaceInstanceAsync(UnityEngine.SceneManagement.Scene scene, string transitionName = TransitionType.Default, UrsaScenePresentation presentation = UrsaScenePresentation.Fullscreen, ISceneParameter parameter = null);
 
         /// <summary>
         /// 現在の履歴スタックを古い順（インデックス0が最も古い）で返します。
