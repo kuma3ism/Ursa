@@ -12,6 +12,7 @@ namespace Ursa.UI
         [SerializeField, Min(1f)] private float _startDiameter = 18f;
         [SerializeField, Min(1f)] private float _endDiameter = 132f;
         [SerializeField, Range(0.01f, 0.25f)] private float _ringThickness = 0.065f;
+        [SerializeField, Range(0f, 0.05f)] private float _distortionStrength;
         [SerializeField, Range(1, 32)] private int _maxConcurrentEffects = 8;
         [SerializeField] private AnimationCurve _sizeCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
         [SerializeField] private AnimationCurve _alphaCurve = AnimationCurve.EaseInOut(0f, 1f, 1f, 0f);
@@ -23,6 +24,7 @@ namespace Ursa.UI
         public float StartDiameter => Mathf.Max(1f, _startDiameter);
         public float EndDiameter => Mathf.Max(StartDiameter, _endDiameter);
         public float RingThickness => Mathf.Clamp(_ringThickness, 0.01f, 0.25f);
+        public float DistortionStrength => Mathf.Clamp(_distortionStrength, 0f, 0.05f);
         public int MaxConcurrentEffects => Mathf.Clamp(_maxConcurrentEffects, 1, 32);
 
         internal float EvaluateSize(float progress)

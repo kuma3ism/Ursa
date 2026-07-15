@@ -18,6 +18,7 @@ namespace Ursa.UI
         private TapEffectProfile _builtInProfile;
         private TapEffectProfile _profileOverride;
         private bool? _enabledOverride;
+        private bool _hasWarnedRippleFeatureMissing;
 
         internal static bool Enabled
         {
@@ -111,6 +112,22 @@ namespace Ursa.UI
             PlayInternal(pointerEvent.ScreenPosition, null);
         }
 
+        private void Update()
+        {
+            UrsaTapRippleState.Update(Time.unscaledDeltaTime);
+            if (_hasWarnedRippleFeatureMissing || !UrsaTapRippleState.HasActiveRipples)
+                return;
+            if (UrsaTapRippleState.WasRendererFeatureEnqueuedRecently)
+                return;
+            if (Time.frameCount - UrsaTapRippleState.LastPlayFrame <= 2)
+                return;
+
+            _hasWarnedRippleFeatureMissing = true;
+            Debug.LogWarning(
+                "[Ursa] Tap ripple distortion is enabled, but UrsaTapRippleRendererFeature is not active. " +
+                "The standard ring effect will be used as a fallback.");
+        }
+
         private void PlayInternal(Vector2 screenPosition, TapEffectProfile requestedProfile)
         {
             if (!IsEnabled)
@@ -126,6 +143,7 @@ namespace Ursa.UI
                 return;
 
             _pool.Play(localPosition, profile);
+            UrsaTapRippleState.Play(screenPosition, profile);
         }
 
         private TapEffectProfile GetBuiltInProfile()
@@ -138,6 +156,8 @@ namespace Ursa.UI
         private void EnsureCanvas()
         {
             if (_canvas != null && _canvas.gameObject != null)
+                return;
+            if (TryAdoptExistingCanvas())
                 return;
 
             var go = new GameObject(CanvasName, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
@@ -153,6 +173,25 @@ namespace Ursa.UI
             _pool = new TapEffectPool(_canvasRect);
         }
 
+        private bool TryAdoptExistingCanvas()
+        {
+            var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var canvas in canvases)
+            {
+                if (canvas == null || canvas.gameObject.name != CanvasName)
+                    continue;
+                if (canvas.transform.root == null || canvas.transform.root.name != "[Ursa]")
+                    continue;
+
+                _canvas = canvas;
+                _canvasRect = (RectTransform)canvas.transform;
+                UrsaUICanvasUtility.ConfigureTapEffectCanvas(canvas);
+                _pool = new TapEffectPool(_canvasRect);
+                return true;
+            }
+            return false;
+        }
+
         private void PrepareForReset()
         {
             UrsaInputRuntime.PointerDown -= OnPointerDown;
@@ -162,6 +201,8 @@ namespace Ursa.UI
             _canvasRect = null;
             _profileOverride = null;
             _enabledOverride = null;
+            _hasWarnedRippleFeatureMissing = false;
+            UrsaTapRippleState.Reset();
 
             if (_builtInProfile != null)
                 Destroy(_builtInProfile);
@@ -175,7 +216,10 @@ namespace Ursa.UI
             if (_builtInProfile != null)
                 Destroy(_builtInProfile);
             if (_instance == this)
+            {
+                UrsaTapRippleState.Reset();
                 _instance = null;
+            }
         }
     }
 }

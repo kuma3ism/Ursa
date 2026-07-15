@@ -21,8 +21,11 @@ Unityの俺俺フレームワーク（まだいろいろ作成中）
   - 暗い背景、リアルタイムぼかし、スクリーンショットぼかし
   - 重ね表示と表示順制御
   - 閉じる理由と結果受け取り
+- タップエフェクト
+  - マウス、タッチ、ペンの押下位置へリング波紋を表示
+  - 色、直径、太さ、時間、同時表示数を設定
+  - URPでは任意で背景を水滴のようにゆがめる
 - 今後追加予定
-  - タップエフェクト
   - Addressable
   - ローディング
  
@@ -626,7 +629,7 @@ URP で `RendererFeature` を使う場合は、使用中の Universal Renderer D
 現在の検証環境は Unity `6000.3.11f1` / URP `17.3.0` です。URP はパッケージの必須依存にせず、UI Camera の camera stack 設定はリフレクションで optional に連携します。URP側のAPI変更により期待するプロパティや列挙値を操作できない場合は、一度だけ warning を出します。
 
 > **Screen Space - Overlay について**
-> URP の `_CameraOpaqueTexture` / `RendererFeature` はカメラが描画した結果だけを入力にします。`Screen Space - Overlay` Canvas はカメラ描画後に合成されるため、ブラー元には含まれません。Ursa が管理する Scene UI / Dialog / Transition / Tap effect は `Screen Space - Camera` 前提で扱います。
+> URP の `_CameraOpaqueTexture` / `RendererFeature` はカメラが描画した結果だけを入力にします。`Screen Space - Overlay` Canvas はカメラ描画後に合成されるため、ブラー元には含まれません。Scene UI / Dialog / Transition は `Screen Space - Camera`、タップのリング表示は最終段の `Screen Space - Overlay` で扱います。
 
 > **重なったダイアログとブラー**
 > ダイアログが複数重なっている場合、最前面より下のダイアログはブラー元として描画され、最前面のバリアとダイアログはその上に描画されます。
@@ -792,6 +795,36 @@ public class MyDialogParameter : IDialogParameter, IDialogResourcePreloader, IDi
 ```csharp
 UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader()));
 ```
+
+---
+
+## タップエフェクト
+
+画面への物理的な押下を検知し、ボタンの成否に関係なく押した位置へリング波紋を表示します。
+利用者側の初期化コードやInput Action Assetは不要です。Input System導入環境ではoptionalな入力アダプターを使用し、未導入環境ではLegacy Inputへフォールバックします。
+
+`Assets/Resources/Ursa/UrsaSettings.asset` では、タップエフェクト全体の有効状態と既定の `TapEffectProfile` を設定できます。Profile未指定時は内蔵リングを使用します。
+
+```csharp
+UrsaTapEffect.Enabled = false;
+UrsaTapEffect.Enabled = true;
+
+UrsaTapEffect.SetProfile(specialProfile);
+UrsaTapEffect.ResetProfile();
+
+UrsaTapEffect.Play(screenPosition);
+UrsaTapEffect.Play(screenPosition, specialProfile);
+```
+
+`TapEffectProfile` では、Prefab、Material、色、再生時間、開始・終了直径、輪の太さ、最大同時表示数を変更できます。Prefabを指定する場合は `TapEffectBase` を継承したコンポーネントを配置してください。エフェクトはunscaled timeで進むため、`Time.timeScale = 0`でも停止しません。
+
+リングCanvasには `GraphicRaycaster` を付けず、GraphicもRaycast対象外にするため、既存UIの入力を遮りません。SceneのPush / Pop / Replaceでは同じCanvasとプールを維持し、`UrsaCore.ResetAsync`では破棄して一系統だけ再生成します。
+
+### URPの水滴ゆがみ
+
+`TapEffectProfile.DistortionStrength`を0より大きくすると、リングに加えて背景を局所的にゆがめます。使用中のUniversal Renderer Dataの **Renderer Features** に `UrsaTapRippleRendererFeature` を追加してください。
+
+最大8個の波紋を1回の全画面パスへまとめ、有効な波紋がないフレームではパスを実行しません。Feature未追加、非URP、Shader未検出の場合もリングは表示され、Featureが実行されない場合はwarningを一度だけ出します。`DistortionStrength = 0`では背景ゆがみを完全に無効化できます。
 
 ---
 
