@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -25,13 +26,34 @@ namespace Ursa.UI
                 EnsureExists();
         }
 
+        public static void ResetOwnedEventSystem()
+        {
+            var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var eventSystem in eventSystems)
+            {
+                if (eventSystem != null && eventSystem.gameObject.name == EventSystemName)
+                    Object.Destroy(eventSystem.gameObject);
+            }
+        }
+
+        public static async Task WaitUntilOwnedEventSystemDestroyedAsync()
+        {
+            for (var i = 0; i < 16; i++)
+            {
+                if (FindOwnedEventSystem() == null)
+                    return;
+
+                await Task.Yield();
+            }
+        }
+
         private static void EnsureExists()
         {
             var activeScene = SceneManager.GetActiveScene();
             if (!activeScene.IsValid() || !activeScene.isLoaded)
                 return;
 
-            if (Object.FindAnyObjectByType<EventSystem>() != null)
+            if (FindAnyEventSystem() != null)
                 return;
 
             var go = new GameObject(EventSystemName);
@@ -43,6 +65,30 @@ namespace Ursa.UI
                 go.AddComponent(inputModuleType);
             else
                 go.AddComponent<StandaloneInputModule>();
+        }
+
+        private static EventSystem FindOwnedEventSystem()
+        {
+            var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var eventSystem in eventSystems)
+            {
+                if (eventSystem != null && eventSystem.gameObject.name == EventSystemName)
+                    return eventSystem;
+            }
+
+            return null;
+        }
+
+        private static EventSystem FindAnyEventSystem()
+        {
+            var eventSystems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var eventSystem in eventSystems)
+            {
+                if (eventSystem != null)
+                    return eventSystem;
+            }
+
+            return null;
         }
     }
 }
