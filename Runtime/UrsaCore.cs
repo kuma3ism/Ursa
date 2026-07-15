@@ -121,6 +121,7 @@ namespace Ursa
 
             var scene = Scene;
             _isResetting = true;
+            UrsaTapEffectRuntime.SuspendPlayback();
             try
             {
                 ThrowIfSceneTransitioning(scene);
@@ -141,6 +142,7 @@ namespace Ursa
             }
             finally
             {
+                UrsaTapEffectRuntime.ResumePlayback();
                 _isResetting = false;
             }
         }

@@ -11,6 +11,7 @@ namespace Ursa.UI
         private const string CanvasName = "[Ursa] TapEffectCanvas";
 
         private static UrsaTapEffectRuntime _instance;
+        private static bool _isPlaybackSuspended;
 
         private Canvas _canvas;
         private RectTransform _canvasRect;
@@ -41,7 +42,19 @@ namespace Ursa.UI
 
         internal static void Play(Vector2 screenPosition, TapEffectProfile profile = null)
         {
+            if (_isPlaybackSuspended)
+                return;
             EnsureInstance().PlayInternal(screenPosition, profile);
+        }
+
+        internal static void SuspendPlayback()
+        {
+            _isPlaybackSuspended = true;
+        }
+
+        internal static void ResumePlayback()
+        {
+            _isPlaybackSuspended = false;
         }
 
         internal static void SetProfile(TapEffectProfile profile)
@@ -64,7 +77,9 @@ namespace Ursa.UI
 
         internal static void ResetStaticState()
         {
+            _isPlaybackSuspended = true;
             ResetOwnedRuntimeObject();
+            _isPlaybackSuspended = false;
         }
 
         private static UrsaTapEffectRuntime EnsureInstance()
@@ -130,7 +145,7 @@ namespace Ursa.UI
 
         private void PlayInternal(Vector2 screenPosition, TapEffectProfile requestedProfile)
         {
-            if (!IsEnabled)
+            if (_isPlaybackSuspended || !IsEnabled)
                 return;
 
             var profile = requestedProfile ?? _profileOverride ?? UrsaCore.Settings.DefaultTapEffectProfile ?? GetBuiltInProfile();

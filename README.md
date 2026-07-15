@@ -819,6 +819,7 @@ UrsaTapEffect.Play(screenPosition, specialProfile);
 `TapEffectProfile` では、Prefab、Material、色、再生時間、開始・終了直径、輪の太さ、最大同時表示数を変更できます。Prefabを指定する場合は `TapEffectBase` を継承したコンポーネントを配置してください。エフェクトはunscaled timeで進むため、`Time.timeScale = 0`でも停止しません。
 
 リングCanvasには `GraphicRaycaster` を付けず、GraphicもRaycast対象外にするため、既存UIの入力を遮りません。SceneのPush / Pop / Replaceでは同じCanvasとプールを維持し、`UrsaCore.ResetAsync`では破棄して一系統だけ再生成します。
+`UrsaCore.ResetAsync` の実行中に届いた物理入力と `UrsaTapEffect.Play` 要求は、破棄途中のRuntimeを再生成しないよう無視されます。Reset完了後の入力から通常どおり再生します。
 
 ### URPの水滴ゆがみ
 
