@@ -249,9 +249,23 @@ await UrsaCore.Scene.ReplaceAsync<NextScene>(new NextSceneParameter());
 await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 ```
 
-### Restart（ゲームを最初からやり直す）
+`UrsaCore.Scene.ResetAsync()` はシーン履歴だけを破棄し、指定したシーンを新しいルートとして読み込みます。
 
-全履歴を破棄してブートシーンを再ロードします。パラメーターなしで `ResetAsync` を呼ぶショートハンドです。
+### Ursa全体のReset（タイトルへ戻る・ゲームをやり直す）
+
+```csharp
+await UrsaCore.ResetAsync<BootScene>(new BootSceneParameter());
+```
+
+`UrsaCore.ResetAsync()` は開いている全ダイアログを閉じ、シーン履歴を指定シーンへリセットした後、Ursa が生成した UI Camera、EventSystem、DontDestroyOnLoad root、標準 `UrsaDialogManager` の描画用キャッシュを破棄して必要時に再生成します。
+ログアウト、タイトルへの帰還、ゲーム全体のやり直しなど、シーン履歴以外の Ursa 実行時状態も畳みたい場合に使います。
+
+登録済みの `ISceneManager` / `IDialogManager` / `IUIManager`、`UrsaSettings`、ゲーム側のセーブデータや独自サービスは維持されます。ゲーム固有の状態は呼び出し側で初期化してください。
+シーン遷移中、または別の `UrsaCore.ResetAsync()` が実行中の場合は `InvalidOperationException` をスローします。
+
+### Restart（パラメーターなしでシーン履歴をリセット）
+
+全シーン履歴を破棄してブートシーンを再ロードします。`ISceneManager.ResetAsync()` をパラメーターなしで呼ぶショートハンドであり、ダイアログや Ursa の実行時オブジェクトはリセットしません。Ursa 全体を畳む場合は `UrsaCore.ResetAsync()` を使います。
 
 ```csharp
 await UrsaCore.Scene.RestartAsync<BootScene>();
