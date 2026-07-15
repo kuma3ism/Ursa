@@ -647,6 +647,12 @@ namespace Ursa
         private static bool _volumeTypeResolved;
         private static Type _volumeType;
 
+        internal static void ResetStaticState()
+        {
+            _volumeTypeResolved = false;
+            _volumeType = null;
+        }
+
         /// <summary>
         /// UnityEngine.Rendering.Volume 型を、アセンブリへの直接参照無しで解決します。
         /// Core RP Library が存在しない環境（Built-in RP専用）では null を返します。

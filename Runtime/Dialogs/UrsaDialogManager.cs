@@ -94,9 +94,21 @@ namespace Ursa.Dialogs
 
         /// <summary>
         /// 全ダイアログのデフォルトとなるバリアスタイル。
-        /// IDialogParameter.BarrierStyle が Dimmed（未指定）の場合に使用されます。
+        /// IDialogParameter.BarrierStyle が Inherit（未指定）の場合に使用されます。
+        /// Inherit 自体は見た目を表さないため指定できません。
         /// </summary>
-        public BarrierStyle DefaultBarrierStyle { get; set; } = BarrierStyle.Dimmed;
+        public BarrierStyle DefaultBarrierStyle
+        {
+            get => _defaultBarrierStyle;
+            set
+            {
+                if (value == BarrierStyle.Inherit)
+                    throw new ArgumentException("DefaultBarrierStyle must be a concrete barrier style.", nameof(value));
+                _defaultBarrierStyle = value;
+            }
+        }
+
+        private BarrierStyle _defaultBarrierStyle = BarrierStyle.Dimmed;
 
         /// <summary>RealtimeBlur スタイル時に使用する実装方式。</summary>
         public RealtimeBlurMode RealtimeBlurMode { get; set; } = Ursa.RealtimeBlurMode.Auto;
@@ -137,6 +149,12 @@ namespace Ursa.Dialogs
             _logger = logger ?? new NullUrsaLogger();
 #endif
             SceneManager.sceneUnloaded += OnSceneUnloaded;
+        }
+
+        internal static void ResetStaticState()
+        {
+            CurrentOpeningEntry.Value = null;
+            UrsaDialogCoroutineRunner.ResetStaticState();
         }
 
         // ---- IDialogManager ----
@@ -212,7 +230,7 @@ namespace Ursa.Dialogs
                         Instance           = go,
                         ReceiverBase       = dialog,
                         BarrierDismissible = parameter?.BarrierDismissible ?? false,
-                        BarrierStyle       = ResolveBarrierStyle(parameter?.BarrierStyle ?? BarrierStyle.Dimmed),
+                        BarrierStyle       = ResolveBarrierStyle(parameter?.BarrierStyle ?? BarrierStyle.Inherit),
                         OwnerRoot          = ownerRoot,
                         BarrierRoot        = layerRoots.BarrierRoot,
                         ContentRoot        = contentRoot,
@@ -446,13 +464,11 @@ namespace Ursa.Dialogs
         // ---- Barrier 管理 ────────────────────────────────────────
 
         /// <summary>
-        /// IDialogParameter からの指定がデフォルト値の場合、DefaultBarrierStyle を適用します。
+        /// IDialogParameter から Inherit が指定された場合、DefaultBarrierStyle を適用します。
         /// </summary>
         private BarrierStyle ResolveBarrierStyle(BarrierStyle parameterStyle)
         {
-            // IDialogParameter で明示的に None や RealtimeBlur / ScreenshotBlur を指定していればそれを尊重
-            // Dimmed は「未指定」として扱い、DefaultBarrierStyle を使用
-            if (parameterStyle == BarrierStyle.Dimmed)
+            if (parameterStyle == BarrierStyle.Inherit)
                 return DefaultBarrierStyle;
             return parameterStyle;
         }
@@ -1096,6 +1112,20 @@ namespace Ursa.Dialogs
             return removed;
         }
 
+        internal void ResetOwnedRuntimeState()
+        {
+            ReleaseScreenshotBlurTexture();
+            ReleaseRealtimeBlurMaterial();
+
+            _ddolCanvas = null;
+            _layerRootsByOwner.Clear();
+            _barrierObject = null;
+            _barrierImage = null;
+            _barrierRawImage = null;
+            _barrierButton = null;
+            _hasWarnedRendererFeatureMissing = false;
+        }
+
         public void Dispose()
         {
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
@@ -1107,6 +1137,11 @@ namespace Ursa.Dialogs
         private static UrsaDialogCoroutineRunner _instance;
 
         public static UrsaDialogCoroutineRunner Current => _instance;
+
+        internal static void ResetStaticState()
+        {
+            _instance = null;
+        }
 
         public static UrsaDialogCoroutineRunner Instance
         {

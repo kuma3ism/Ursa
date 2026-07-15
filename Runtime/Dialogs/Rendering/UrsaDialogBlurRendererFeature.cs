@@ -12,6 +12,12 @@ namespace Ursa.Dialogs.Rendering
     {
         private static int _lastEnqueuedFrame = -1000;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticState()
+        {
+            _lastEnqueuedFrame = -1000;
+        }
+
         public static bool WasEnqueuedRecently => Time.frameCount - _lastEnqueuedFrame <= 2;
 
         [Serializable]

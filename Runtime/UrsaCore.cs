@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
+using Ursa.Dialogs;
+using Ursa.Transitions;
 using Ursa.UI;
 
 namespace Ursa
@@ -10,6 +12,22 @@ namespace Ursa
     /// </summary>
     public static class UrsaCore
     {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticState()
+        {
+            Dispose();
+            _isResetting = false;
+            _settings = null;
+
+            UrsaSettings.ResetStaticState();
+            UrsaSceneManager.ResetStaticState();
+            UrsaDialogManager.ResetStaticState();
+            TransitionCanvas.ResetStaticState();
+            UrsaUICamera.ResetStaticState();
+            UrsaEventSystem.ResetStaticState();
+            UrsaDontDestroyOnLoadRoot.ResetStaticState();
+        }
+
         // ---- Scene ----
 
         private static ISceneManager _scene;
@@ -110,6 +128,7 @@ namespace Ursa
                 ThrowIfSceneTransitioning(scene);
 
                 await scene.ResetAsync<TBootScene>(parameter, transitionName);
+                ResetManagerRuntimeState();
                 ResetOwnedRuntimeObjects();
                 await UrsaEventSystem.WaitUntilOwnedEventSystemDestroyedAsync();
                 UrsaEventSystem.RequestEnsureExists();
@@ -131,6 +150,12 @@ namespace Ursa
             UrsaUICamera.ResetOwnedCameras();
             UrsaEventSystem.ResetOwnedEventSystem();
             UrsaDontDestroyOnLoadRoot.DestroyOwnedRoot();
+        }
+
+        private static void ResetManagerRuntimeState()
+        {
+            if (_dialog is UrsaDialogManager dialogManager)
+                dialogManager.ResetOwnedRuntimeState();
         }
 
         // ---- Dispose ----

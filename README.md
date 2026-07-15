@@ -98,6 +98,10 @@ public class SomePresenter
 }
 ```
 
+Ursa の標準 `UrsaSceneManager` / `UrsaDialogManager` は、DI経由で使用した場合も UI Camera、EventSystem、DontDestroyOnLoad の Ursa root を実行環境内で共有します。Manager や loader の差し替え、利用側クラスへのモック注入は可能ですが、標準ランタイムUI基盤を複数の独立した系統として動かす設計ではありません。
+
+DIコンテナで生成した `UrsaDialogManager` は `IDisposable` としてコンテナのライフタイム管理に含めてください。`UrsaCore` を使う場合は、Play開始時の static 初期化と `UrsaCore.Dispose()` が登録済みManagerを整理します。
+
 | 選び方 | おすすめのケース |
 |--------|----------------|
 | A. UrsaCore を使う | 小規模なプロジェクト、DI導入を検討していない |
@@ -245,9 +249,23 @@ await UrsaCore.Scene.ReplaceAsync<NextScene>(new NextSceneParameter());
 await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 ```
 
-### Restart（ゲームを最初からやり直す）
+`UrsaCore.Scene.ResetAsync()` はシーン履歴だけを破棄し、指定したシーンを新しいルートとして読み込みます。
 
-全履歴を破棄してブートシーンを再ロードします。パラメーターなしで `ResetAsync` を呼ぶショートハンドです。
+### Ursa全体のReset（タイトルへ戻る・ゲームをやり直す）
+
+```csharp
+await UrsaCore.ResetAsync<BootScene>(new BootSceneParameter());
+```
+
+`UrsaCore.ResetAsync()` は開いている全ダイアログを閉じ、シーン履歴を指定シーンへリセットした後、Ursa が生成した UI Camera、EventSystem、DontDestroyOnLoad root、標準 `UrsaDialogManager` の描画用キャッシュを破棄して必要時に再生成します。
+ログアウト、タイトルへの帰還、ゲーム全体のやり直しなど、シーン履歴以外の Ursa 実行時状態も畳みたい場合に使います。
+
+登録済みの `ISceneManager` / `IDialogManager` / `IUIManager`、`UrsaSettings`、ゲーム側のセーブデータや独自サービスは維持されます。ゲーム固有の状態は呼び出し側で初期化してください。
+シーン遷移中、または別の `UrsaCore.ResetAsync()` が実行中の場合は `InvalidOperationException` をスローします。
+
+### Restart（パラメーターなしでシーン履歴をリセット）
+
+全シーン履歴を破棄してブートシーンを再ロードします。`ISceneManager.ResetAsync()` をパラメーターなしで呼ぶショートハンドであり、ダイアログや Ursa の実行時オブジェクトはリセットしません。Ursa 全体を畳む場合は `UrsaCore.ResetAsync()` を使います。
 
 ```csharp
 await UrsaCore.Scene.RestartAsync<BootScene>();
@@ -550,11 +568,9 @@ public class ConfirmDialogParameter : IDialogParameter
 | `IsHistory` | `true` | 履歴スタックに積むかどうか。`false` にすると積まれません |
 | `BarrierDismissible` | `false` | バリア（背景）タップで閉じることを許可するか |
 | `Placement` | `Scene` | `Scene`（defaultParent に配置）または `DontDestroyOnLoad` |
-| `BarrierStyle` | `Dimmed` | バリアの見た目。`None` / `RealtimeBlur` / `ScreenshotBlur` は個別指定として扱われます |
+| `BarrierStyle` | `Inherit` | `Inherit` は `DefaultBarrierStyle` を使用します。それ以外は個別ダイアログの明示指定です |
 
-> **BarrierStyle の注意**  
-> 現在の API では `BarrierStyle.Dimmed` を「未指定」として扱い、`UrsaDialogManager.DefaultBarrierStyle` を適用します。  
-> そのため `DefaultBarrierStyle = BarrierStyle.RealtimeBlur` の状態では、個別ダイアログだけを明示的に `Dimmed` に戻すことはできません。個別指定として使えるのは `None` / `RealtimeBlur` / `ScreenshotBlur` です。
+`DefaultBarrierStyle` を変更した状態でも、個別ダイアログで `Dimmed` / `None` / `RealtimeBlur` / `ScreenshotBlur` を明示できます。
 
 ### Scene ダイアログとグローバルダイアログ
 
@@ -606,6 +622,8 @@ public class ConfirmDialogParameter : IDialogParameter
 | `ScreenshotFallback` | 開いた瞬間のスクリーンショットをぼかす | リアルタイムではなく静止画 |
 
 URP で `RendererFeature` を使う場合は、使用中の Universal Renderer Data の **Renderer Features** に `UrsaDialogBlurRendererFeature` を追加してください。未追加、または実行されていない場合は warning を出し、`ScreenshotBlur` へフォールバックします。`ScreenshotBlur` 用 material も見つからない場合は `Dimmed` にフォールバックします。
+
+現在の検証環境は Unity `6000.3.11f1` / URP `17.3.0` です。URP はパッケージの必須依存にせず、UI Camera の camera stack 設定はリフレクションで optional に連携します。URP側のAPI変更により期待するプロパティや列挙値を操作できない場合は、一度だけ warning を出します。
 
 > **Screen Space - Overlay について**
 > URP の `_CameraOpaqueTexture` / `RendererFeature` はカメラが描画した結果だけを入力にします。`Screen Space - Overlay` Canvas はカメラ描画後に合成されるため、ブラー元には含まれません。Ursa が管理する Scene UI / Dialog / Transition / Tap effect は `Screen Space - Camera` 前提で扱います。
