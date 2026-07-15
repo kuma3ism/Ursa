@@ -22,10 +22,10 @@ namespace Ursa
 
         /// <summary>
         /// バリアの表示スタイル。
-        /// Dimmed は「未指定」として扱われ、UrsaDialogManager.DefaultBarrierStyle が適用されます。
-        /// 個別ダイアログで確実に指定できるのは None / RealtimeBlur / ScreenshotBlur です。
+        /// Inherit の場合は UrsaDialogManager.DefaultBarrierStyle が適用されます。
+        /// それ以外の値は個別ダイアログの明示指定として扱われます。
         /// </summary>
-        BarrierStyle BarrierStyle => BarrierStyle.Dimmed;
+        BarrierStyle BarrierStyle => BarrierStyle.Inherit;
     }
 
     /// <summary>ダイアログの配置先を指定します。</summary>
@@ -44,16 +44,15 @@ namespace Ursa
     public enum BarrierStyle
     {
         /// <summary>バリアを表示しません。</summary>
-        None,
-        /// <summary>
-        /// 黒半透明のバリアを表示します。
-        /// IDialogParameter.BarrierStyle では「未指定」として扱われ、DefaultBarrierStyle が適用されます。
-        /// </summary>
-        Dimmed,
+        None = 0,
+        /// <summary>黒半透明のバリアを表示します。</summary>
+        Dimmed = 1,
         /// <summary>GrabPass を使ったリアルタイムブラーを表示します。UrsaDialogManager.BarrierMaterial の設定が必要です。</summary>
-        RealtimeBlur,
+        RealtimeBlur = 2,
         /// <summary>画面キャプチャをぼかして表示します。処理負荷が高い場合があります。</summary>
-        ScreenshotBlur,
+        ScreenshotBlur = 3,
+        /// <summary>UrsaDialogManager.DefaultBarrierStyle を使用します。</summary>
+        Inherit = 4,
     }
 
     /// <summary>

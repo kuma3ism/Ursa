@@ -17,6 +17,11 @@ namespace Ursa.Transitions
     {
         private static TransitionCanvas _instance;
 
+        internal static void ResetStaticState()
+        {
+            _instance = null;
+        }
+
         /// <summary>
         /// シーン上に <c>TransitionCanvas</c> がなければ自動生成して返します。
         /// </summary>

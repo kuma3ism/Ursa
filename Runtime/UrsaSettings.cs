@@ -16,6 +16,11 @@ namespace Ursa
     {
         private static UrsaSettings _instance;
 
+        internal static void ResetStaticState()
+        {
+            _instance = null;
+        }
+
         public static UrsaSettings Instance
         {
             get

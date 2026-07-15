@@ -11,6 +11,12 @@ namespace Ursa.UI
         private static bool _requested;
         private static bool _afterFirstSceneLoad;
 
+        internal static void ResetStaticState()
+        {
+            _requested = false;
+            _afterFirstSceneLoad = false;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureAfterFirstSceneLoad()
         {

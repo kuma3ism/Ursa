@@ -8,6 +8,11 @@ namespace Ursa
 
         private static Transform _root;
 
+        internal static void ResetStaticState()
+        {
+            _root = null;
+        }
+
         public static Transform Ensure()
         {
             if (_root != null && _root.gameObject != null)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Ursa.UI
@@ -29,6 +30,19 @@ namespace Ursa.UI
         private static Type _cameraRenderTypeType;
         private static Type _antialiasingModeType;
         private static Type _cameraOverrideOptionType;
+        private static readonly HashSet<string> ReflectionWarnings = new HashSet<string>();
+
+        internal static void ResetStaticState()
+        {
+            _sceneCamera = null;
+            _dialogBackgroundCamera = null;
+            _dialogCamera = null;
+            _universalCameraDataType = null;
+            _cameraRenderTypeType = null;
+            _antialiasingModeType = null;
+            _cameraOverrideOptionType = null;
+            ReflectionWarnings.Clear();
+        }
 
         public static Camera Ensure()
         {
@@ -246,10 +260,18 @@ namespace Ursa.UI
             if (cameraDataType == null)
                 return null;
 
-            var cameraData = camera.GetComponent(cameraDataType);
-            if (cameraData == null)
-                cameraData = camera.gameObject.AddComponent(cameraDataType);
-            return cameraData;
+            try
+            {
+                var cameraData = camera.GetComponent(cameraDataType);
+                if (cameraData == null)
+                    cameraData = camera.gameObject.AddComponent(cameraDataType);
+                return cameraData;
+            }
+            catch (Exception ex)
+            {
+                WarnReflectionFailure("component", $"could not attach {cameraDataType.FullName}", ex);
+                return null;
+            }
         }
 
         private static Component GetUniversalCameraData(Camera camera)
@@ -267,26 +289,50 @@ namespace Ursa.UI
         {
             var property = target.GetType().GetProperty(propertyName);
             if (property == null)
+            {
+                WarnReflectionFailure(propertyName, $"property '{propertyName}' was not found on {target.GetType().FullName}");
                 return false;
+            }
 
-            var value = property.GetValue(target);
-            return value != null && string.Equals(value.ToString(), valueName, StringComparison.Ordinal);
+            try
+            {
+                var value = property.GetValue(target);
+                return value != null && string.Equals(value.ToString(), valueName, StringComparison.Ordinal);
+            }
+            catch (Exception ex)
+            {
+                WarnReflectionFailure(propertyName, $"property '{propertyName}' could not be read on {target.GetType().FullName}", ex);
+                return false;
+            }
         }
 
         private static void SetEnumPropertyValue(object target, string propertyName, string valueName)
         {
             var property = target.GetType().GetProperty(propertyName);
             if (property == null || !property.CanWrite)
+            {
+                WarnReflectionFailure(propertyName, $"writable property '{propertyName}' was not found on {target.GetType().FullName}");
                 return;
+            }
 
             var enumType = property.PropertyType;
             if (!enumType.IsEnum)
                 enumType = ResolveUniversalEnumType(propertyName);
             if (enumType == null || !enumType.IsEnum)
+            {
+                WarnReflectionFailure(propertyName, $"enum type for property '{propertyName}' could not be resolved");
                 return;
+            }
 
-            var value = Enum.Parse(enumType, valueName);
-            property.SetValue(target, value);
+            try
+            {
+                var value = Enum.Parse(enumType, valueName);
+                property.SetValue(target, value);
+            }
+            catch (Exception ex)
+            {
+                WarnReflectionFailure($"{propertyName}.{valueName}", $"'{valueName}' could not be assigned to {target.GetType().FullName}.{propertyName}", ex);
+            }
         }
 
         private static Type ResolveUniversalEnumType(string propertyName)
@@ -304,15 +350,25 @@ namespace Ursa.UI
         {
             var property = target.GetType().GetProperty(propertyName);
             if (property == null || !property.CanWrite)
+            {
+                WarnReflectionFailure(propertyName, $"writable property '{propertyName}' was not found on {target.GetType().FullName}");
                 return;
+            }
 
-            property.SetValue(target, value);
+            try
+            {
+                property.SetValue(target, value);
+            }
+            catch (Exception ex)
+            {
+                WarnReflectionFailure(propertyName, $"property '{propertyName}' could not be assigned on {target.GetType().FullName}", ex);
+            }
         }
 
         private static void AddCameraToStack(object baseCameraData, Camera uiCamera)
         {
-            var property = baseCameraData.GetType().GetProperty("cameraStack");
-            if (property?.GetValue(baseCameraData) is not IList cameraStack)
+            var cameraStack = GetCameraStack(baseCameraData);
+            if (cameraStack == null)
                 return;
 
             if (!cameraStack.Contains(uiCamera))
@@ -328,7 +384,8 @@ namespace Ursa.UI
                     continue;
 
                 var cameraData = GetUniversalCameraData(camera);
-                RemoveCameraFromStack(cameraData, uiCamera);
+                if (cameraData != null && HasEnumPropertyValue(cameraData, "renderType", "Base"))
+                    RemoveCameraFromStack(cameraData, uiCamera);
             }
         }
 
@@ -337,12 +394,39 @@ namespace Ursa.UI
             if (baseCameraData == null)
                 return;
 
-            var property = baseCameraData.GetType().GetProperty("cameraStack");
-            if (property?.GetValue(baseCameraData) is not IList cameraStack)
+            var cameraStack = GetCameraStack(baseCameraData);
+            if (cameraStack == null)
                 return;
 
             if (cameraStack.Contains(uiCamera))
                 cameraStack.Remove(uiCamera);
+        }
+
+        private static IList GetCameraStack(object cameraData)
+        {
+            try
+            {
+                var property = cameraData.GetType().GetProperty("cameraStack");
+                if (property?.GetValue(cameraData) is IList cameraStack)
+                    return cameraStack;
+            }
+            catch (Exception ex)
+            {
+                WarnReflectionFailure("cameraStack", $"cameraStack could not be read on {cameraData.GetType().FullName}", ex);
+                return null;
+            }
+
+            WarnReflectionFailure("cameraStack", $"cameraStack could not be read on {cameraData.GetType().FullName}");
+            return null;
+        }
+
+        private static void WarnReflectionFailure(string key, string detail, Exception exception = null)
+        {
+            if (!ReflectionWarnings.Add(key))
+                return;
+
+            var exceptionDetail = exception == null ? string.Empty : $" ({exception.GetType().Name}: {exception.Message})";
+            Debug.LogWarning($"[Ursa] URP camera integration failed: {detail}{exceptionDetail}. The installed URP API may be incompatible with this Ursa version.");
         }
     }
 }
