@@ -825,6 +825,8 @@ UrsaTapEffect.Play(screenPosition, specialProfile);
 
 `TapEffectProfile.DistortionStrength`を0より大きくすると、リングに加えて背景を局所的にゆがめます。使用中のUniversal Renderer Dataの **Renderer Features** に `UrsaTapRippleRendererFeature` を追加してください。
 
+背景ゆがみはBase Camera単体ではなく、Scene UI / Dialog用Overlay Cameraを含むcamera stackの最終出力へ適用します。最後にScreen Space - Overlayのリングを重ねるため、リング自体はゆがみません。
+
 最大8個の波紋を1回の全画面パスへまとめ、有効な波紋がないフレームではパスを実行しません。Feature未追加、非URP、Shader未検出の場合もリングは表示され、Featureが実行されない場合はwarningを一度だけ出します。`DistortionStrength = 0`では背景ゆがみを完全に無効化できます。
 
 ---

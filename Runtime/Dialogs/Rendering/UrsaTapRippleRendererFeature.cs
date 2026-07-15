@@ -38,9 +38,9 @@ namespace Ursa.UI.Rendering
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
             var cameraData = renderingData.cameraData;
-            if (cameraData.renderType != CameraRenderType.Base)
-                return;
             if (cameraData.cameraType != CameraType.Game && cameraData.cameraType != CameraType.SceneView)
+                return;
+            if (!cameraData.resolveFinalTarget)
                 return;
             if (!UrsaTapRippleState.HasActiveRipples || _material == null)
                 return;
@@ -108,20 +108,26 @@ namespace Ursa.UI.Rendering
 
                 var resourceData = frameData.Get<UniversalResourceData>();
                 var cameraData = frameData.Get<UniversalCameraData>();
-                if (resourceData.isActiveTargetBackBuffer || !resourceData.activeColorTexture.IsValid())
+                if (!resourceData.activeColorTexture.IsValid() || !resourceData.cameraColor.IsValid())
                     return;
 
                 UpdateMaterial(cameraData.cameraTargetDescriptor);
 
-                var source = resourceData.activeColorTexture;
-                var destinationDescriptor = renderGraph.GetTextureDesc(source);
-                destinationDescriptor.name = "Ursa Tap Ripple Color";
-                destinationDescriptor.clearBuffer = false;
-                var destination = renderGraph.CreateTexture(destinationDescriptor);
+                var destination = resourceData.activeColorTexture;
+                var sourceDescriptor = renderGraph.GetTextureDesc(resourceData.cameraColor);
+                sourceDescriptor.name = "Ursa Tap Ripple Source";
+                sourceDescriptor.clearBuffer = false;
+                var source = renderGraph.CreateTexture(sourceDescriptor);
+
+                renderGraph.AddBlitPass(
+                    destination,
+                    source,
+                    Vector2.one,
+                    Vector2.zero,
+                    passName: "Ursa Tap Ripple Copy Color");
 
                 var parameters = new RenderGraphUtils.BlitMaterialParameters(source, destination, _material, 0);
-                renderGraph.AddBlitPass(parameters, "Ursa Tap Ripple");
-                resourceData.cameraColor = destination;
+                renderGraph.AddBlitPass(parameters, "Ursa Tap Ripple Distortion");
             }
 
             [Obsolete("Compatibility-mode path for URP versions that do not execute RenderGraph passes.")]
