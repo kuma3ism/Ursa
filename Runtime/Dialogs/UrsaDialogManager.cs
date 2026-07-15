@@ -23,6 +23,31 @@ namespace Ursa.Dialogs
         public RectTransform OwnerRoot { get; set; }
         public RectTransform BarrierRoot { get; set; }
         public RectTransform ContentRoot { get; set; }
+
+        /// <summary>
+        /// このエントリの OnOpenAsync（開くアニメーション等）が完了するタスク。
+        /// Close 側はこのエントリを破棄する前に、これが完了しているかを確認する必要があります
+        /// （開いている途中の GameObject を破棄すると、開く処理側で
+        /// MissingReferenceException が発生する可能性があるため）。
+        ///
+        /// ただし OnOpenAsync 自身が（OnOpenAsync 内から自分自身を閉じるなどして）
+        /// このタスクの完了を間接的に待つ状況もあり得るため、Close 側は
+        /// このタスクを直接 await してはいけません（自己デッドロックします）。
+        /// OnOpenAsync 内から自分自身を閉じる場合だけは自己デッドロックを避けるため、
+        /// Close 側はこのタスクを待たずに <see cref="PendingCloseReason"/> を記録します。
+        /// </summary>
+        public Task OpenTask { get; set; }
+
+        /// <summary>
+        /// OnOpenAsync の実行中に Close 要求が来た場合、その理由をここに記録します。
+        /// OpenAsync は OnOpenAsync 完了後にこれを確認し、値が入っていればその場でエントリを破棄します。
+        /// </summary>
+        public DialogCloseReason? PendingCloseReason { get; set; }
+
+        /// <summary>
+        /// Opening 中に外部から Close 要求が来た場合、Close 側が最終的な破棄完了を待つためのタスク。
+        /// </summary>
+        public TaskCompletionSource<bool> CloseCompletion { get; } = new TaskCompletionSource<bool>();
     }
 
     internal sealed class DialogLayerRoots
@@ -46,6 +71,7 @@ namespace Ursa.Dialogs
 
         // ---- 状態 ----
 
+        private static readonly AsyncLocal<DialogHistoryEntry> CurrentOpeningEntry = new AsyncLocal<DialogHistoryEntry>();
         private int _transitionCount;
         private readonly List<DialogHistoryEntry> _history = new List<DialogHistoryEntry>();
 
@@ -175,9 +201,10 @@ namespace Ursa.Dialogs
                 }
 
                 bool addToHistory = parameter == null || parameter.IsHistory;
+                DialogHistoryEntry historyEntry = null;
                 if (addToHistory)
                 {
-                    _history.Add(new DialogHistoryEntry
+                    historyEntry = new DialogHistoryEntry
                     {
                         Index              = _history.Count,
                         DialogName         = name,
@@ -189,12 +216,62 @@ namespace Ursa.Dialogs
                         OwnerRoot          = ownerRoot,
                         BarrierRoot        = layerRoots.BarrierRoot,
                         ContentRoot        = contentRoot,
-                    });
+                    };
+                    _history.Add(historyEntry);
                     RebuildIndices();
                     UpdateBarrier();
                 }
 
-                await dialog.OnOpenAsync(parameter);
+                // OnOpenAsync の実行中に外部（あるいは OnOpenAsync 自身）から
+                // CloseTopAsync/CloseAllAsync が呼ばれても、このダイアログの GameObject が
+                // 破棄されないよう、実行中の Task をエントリに記録しておく。
+                // 破棄自体は Close 側では行わず、この Task の完了後にここで後始末する
+                // （Close 側で直接待つと、OnOpenAsync 内から自分自身を閉じるケースで
+                // 自己デッドロックするため）。
+                var previousOpeningEntry = CurrentOpeningEntry.Value;
+                try
+                {
+                    if (historyEntry != null)
+                        CurrentOpeningEntry.Value = historyEntry;
+
+                    var openTask = dialog.OnOpenAsync(parameter);
+                    if (historyEntry != null)
+                    {
+                        historyEntry.OpenTask = openTask;
+                    }
+
+                    await openTask;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"[Ursa] {name} の OnOpenAsync で例外が発生したため、ダイアログを破棄します: {ex}");
+                    if (historyEntry != null)
+                    {
+                        FinalizeFailedOpen(historyEntry);
+                    }
+                    else
+                    {
+                        UnityEngine.Object.Destroy(contentRoot.gameObject);
+                        _loader.Unload(name);
+                    }
+                    throw;
+                }
+                finally
+                {
+                    if (historyEntry != null)
+                        CurrentOpeningEntry.Value = previousOpeningEntry;
+                }
+
+                // OnOpenAsync 完了後、その最中に Close 要求（自分自身からの CloseAsync を含む）が
+                // 来ていた場合はここでまとめて破棄する。
+                if (historyEntry != null && historyEntry.PendingCloseReason.HasValue)
+                {
+                    var pendingReason = historyEntry.PendingCloseReason.Value;
+                    _logger.Log($"<color=cyan>[Ursa]</color> Dialog Closing (deferred from opening): {name} ({pendingReason})");
+                    await DestroyEntryAsync(historyEntry, pendingReason);
+                    UpdateBarrier();
+                    return dialog;
+                }
 
                 if (ct.CanBeCanceled)
                 {
@@ -252,17 +329,21 @@ namespace Ursa.Dialogs
                 _history.RemoveAt(_history.Count - 1);
                 RebuildIndices();
 
+                if (entry.OpenTask != null && !entry.OpenTask.IsCompleted)
+                {
+                    // Opening 中。ここで OpenTask の完了を待つと、OnOpenAsync が
+                    // 自分自身を閉じようとした場合に自己デッドロックするため、
+                    // 破棄はせず要求だけ記録して OpenAsync 側に委ねる。
+                    entry.PendingCloseReason = reason;
+                    _logger.Log($"<color=cyan>[Ursa]</color> Dialog Close requested while opening (deferred): {entry.DialogName} ({reason})");
+                    UpdateBarrier();
+                    if (CurrentOpeningEntry.Value != entry)
+                        await entry.CloseCompletion.Task;
+                    return;
+                }
+
                 _logger.Log($"<color=cyan>[Ursa]</color> Dialog Closing: {entry.DialogName} ({reason})");
-
-                if (entry.ReceiverBase != null)
-                    await entry.ReceiverBase.OnCloseAsync(reason);
-
-                if (entry.ContentRoot != null)
-                    UnityEngine.Object.Destroy(entry.ContentRoot.gameObject);
-                else if (entry.Instance != null)
-                    UnityEngine.Object.Destroy(entry.Instance);
-
-                _loader.Unload(entry.DialogName);
+                await DestroyEntryAsync(entry, reason);
                 UpdateBarrier();
             }
             finally
@@ -274,6 +355,7 @@ namespace Ursa.Dialogs
         public async Task CloseAllAsync(DialogCloseReason reason = DialogCloseReason.Programmatic)
         {
             RemoveDestroyedHistoryEntries();
+            var deferredCloseTasks = new List<Task>();
             _transitionCount++;
             try
             {
@@ -282,21 +364,24 @@ namespace Ursa.Dialogs
                     var entry = _history[_history.Count - 1];
                     _history.RemoveAt(_history.Count - 1);
 
+                    if (entry.OpenTask != null && !entry.OpenTask.IsCompleted)
+                    {
+                        entry.PendingCloseReason = reason;
+                        _logger.Log($"<color=cyan>[Ursa]</color> Dialog CloseAll requested while opening (deferred): {entry.DialogName} ({reason})");
+                        if (CurrentOpeningEntry.Value != entry)
+                            deferredCloseTasks.Add(entry.CloseCompletion.Task);
+                        continue;
+                    }
+
                     _logger.Log($"<color=cyan>[Ursa]</color> Dialog CloseAll: {entry.DialogName} ({reason})");
-
-                    if (entry.ReceiverBase != null)
-                        await entry.ReceiverBase.OnCloseAsync(reason);
-
-                    if (entry.ContentRoot != null)
-                        UnityEngine.Object.Destroy(entry.ContentRoot.gameObject);
-                    else if (entry.Instance != null)
-                        UnityEngine.Object.Destroy(entry.Instance);
-
-                    _loader.Unload(entry.DialogName);
+                    await DestroyEntryAsync(entry, reason);
                 }
 
                 RebuildIndices();
                 UpdateBarrier();
+
+                foreach (var closeTask in deferredCloseTasks)
+                    await closeTask;
             }
             finally
             {
@@ -307,6 +392,55 @@ namespace Ursa.Dialogs
                     ReleaseRealtimeBlurMaterial();
                 }
             }
+        }
+
+        /// <summary>
+        /// エントリの ReceiverBase.OnCloseAsync を呼び、GameObject を破棄し、ローダーを解放します。
+        /// 呼び出し時点でエントリは既に _history から除去されている前提です。
+        /// </summary>
+        private async Task DestroyEntryAsync(DialogHistoryEntry entry, DialogCloseReason reason)
+        {
+            try
+            {
+                if (entry.ReceiverBase != null)
+                    await entry.ReceiverBase.OnCloseAsync(reason);
+
+                if (entry.ContentRoot != null)
+                    UnityEngine.Object.Destroy(entry.ContentRoot.gameObject);
+                else if (entry.Instance != null)
+                    UnityEngine.Object.Destroy(entry.Instance);
+
+                _loader.Unload(entry.DialogName);
+                entry.CloseCompletion.TrySetResult(true);
+            }
+            catch (Exception ex)
+            {
+                entry.CloseCompletion.TrySetException(ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// OnOpenAsync が例外で失敗した場合の後始末。
+        /// OnCloseAsync は（Open が成立していないため）呼ばず、履歴からの除去と破棄のみ行います。
+        /// </summary>
+        private void FinalizeFailedOpen(DialogHistoryEntry entry)
+        {
+            var idx = _history.IndexOf(entry);
+            if (idx >= 0)
+            {
+                _history.RemoveAt(idx);
+                RebuildIndices();
+            }
+
+            if (entry.ContentRoot != null)
+                UnityEngine.Object.Destroy(entry.ContentRoot.gameObject);
+            else if (entry.Instance != null)
+                UnityEngine.Object.Destroy(entry.Instance);
+
+            _loader.Unload(entry.DialogName);
+            entry.CloseCompletion.TrySetResult(true);
+            UpdateBarrier();
         }
 
         // ---- Barrier 管理 ────────────────────────────────────────
