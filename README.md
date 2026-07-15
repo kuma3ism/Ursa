@@ -801,7 +801,7 @@ UrsaCore.Initialize(new UrsaDialogManager(loader: new MyAddressablesDialogLoader
 ## タップエフェクト
 
 画面への物理的な押下を検知し、ボタンの成否に関係なく押した位置へリング波紋を表示します。
-利用者側の初期化コードやInput Action Assetは不要です。Input System導入環境ではoptionalな入力アダプターを使用し、未導入環境ではLegacy Inputへフォールバックします。
+利用者側の初期化コードやInput Action Assetは不要です。Input System導入環境ではoptionalな入力アダプターを使用し、未導入環境ではLegacy Inputへフォールバックします。Input System側は押下の生イベントを内部で保持するため、同じ入力更新内で押して離した短いMouse / Pen操作も取りこぼしません。
 
 `Assets/Resources/Ursa/UrsaSettings.asset` では、タップエフェクト全体の有効状態と既定の `TapEffectProfile` を設定できます。Profile未指定時は内蔵リングを使用します。
 
