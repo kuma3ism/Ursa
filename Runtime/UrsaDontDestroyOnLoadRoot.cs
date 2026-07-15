@@ -41,5 +41,23 @@ namespace Ursa
             if (go.transform != root && go.transform.parent != root)
                 go.transform.SetParent(root, false);
         }
+
+        public static void DestroyOwnedRoot()
+        {
+            // Everything attached through UrsaDontDestroyOnLoadRoot.Attach is Ursa-owned runtime state.
+            // UrsaCore.ResetAsync intentionally destroys this whole root so the boot scene starts clean.
+            if (_root == null)
+            {
+                var existing = GameObject.Find(RootName);
+                if (existing != null)
+                    _root = existing.transform;
+            }
+
+            if (_root != null)
+            {
+                Object.Destroy(_root.gameObject);
+                _root = null;
+            }
+        }
     }
 }

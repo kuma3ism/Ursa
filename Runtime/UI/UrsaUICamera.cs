@@ -198,6 +198,23 @@ namespace Ursa.UI
                 AttachToBaseCameraExclusive(bestCamera);
         }
 
+        internal static void ResetOwnedCameras()
+        {
+            DestroyOwnedCamera(ref _sceneCamera);
+            DestroyOwnedCamera(ref _dialogBackgroundCamera);
+            DestroyOwnedCamera(ref _dialogCamera);
+        }
+
+        private static void DestroyOwnedCamera(ref Camera camera)
+        {
+            if (camera == null)
+                return;
+
+            DetachFromAllBaseCameras(camera);
+            UnityEngine.Object.Destroy(camera.gameObject);
+            camera = null;
+        }
+
         private static void Configure(Camera camera)
         {
             int uiLayer = LayerMask.NameToLayer("UI");

@@ -1,4 +1,6 @@
 using System;
+using System.Threading.Tasks;
+using UnityEngine;
 using Ursa.UI;
 
 namespace Ursa
@@ -27,6 +29,7 @@ namespace Ursa
         // ---- UI ----
 
         private static IUIManager _ui;
+        private static bool _isResetting;
 
         public static IUIManager UI =>
             _ui ?? throw new InvalidOperationException(
@@ -79,6 +82,55 @@ namespace Ursa
         {
             _ui = uiManager ?? throw new ArgumentNullException(nameof(uiManager));
             UrsaEventSystem.RequestEnsureExists();
+        }
+
+        // ---- Reset ----
+
+        /// <summary>
+        /// Ursa が管理する実行中の状態を畳み、指定したシーンを新しいルートとして読み込みます。
+        /// Dialog が初期化済みの場合は全て閉じてから、Scene の ResetAsync を実行します。
+        /// </summary>
+        public static async Task ResetAsync<TBootScene>(
+            ISceneParameter parameter = null,
+            string transitionName = TransitionType.Default)
+            where TBootScene : MonoBehaviour
+        {
+            if (_isResetting)
+                throw new InvalidOperationException("UrsaCore.ResetAsync is already running.");
+
+            var scene = Scene;
+            _isResetting = true;
+            try
+            {
+                ThrowIfSceneTransitioning(scene);
+
+                if (_dialog != null)
+                    await _dialog.CloseAllAsync(DialogCloseReason.Programmatic);
+
+                ThrowIfSceneTransitioning(scene);
+
+                await scene.ResetAsync<TBootScene>(parameter, transitionName);
+                ResetOwnedRuntimeObjects();
+                await UrsaEventSystem.WaitUntilOwnedEventSystemDestroyedAsync();
+                UrsaEventSystem.RequestEnsureExists();
+            }
+            finally
+            {
+                _isResetting = false;
+            }
+        }
+
+        private static void ThrowIfSceneTransitioning(ISceneManager sceneManager)
+        {
+            if (sceneManager.IsTransitioning)
+                throw new InvalidOperationException("UrsaCore.ResetAsync cannot run while a scene transition is in progress.");
+        }
+
+        private static void ResetOwnedRuntimeObjects()
+        {
+            UrsaUICamera.ResetOwnedCameras();
+            UrsaEventSystem.ResetOwnedEventSystem();
+            UrsaDontDestroyOnLoadRoot.DestroyOwnedRoot();
         }
 
         // ---- Dispose ----
