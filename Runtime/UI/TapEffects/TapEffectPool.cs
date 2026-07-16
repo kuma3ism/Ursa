@@ -137,7 +137,10 @@ namespace Ursa.UI
             }
             else
             {
-                var go = new GameObject("[Ursa] Tap Ring", typeof(RectTransform));
+                var go = new GameObject(
+                    "[Ursa] Tap Ring",
+                    typeof(RectTransform),
+                    typeof(CanvasRenderer));
                 go.transform.SetParent(_parent, false);
                 effect = go.AddComponent<UrsaTapRingEffect>();
             }

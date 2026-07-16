@@ -4,6 +4,7 @@ using UnityEngine.UI;
 
 namespace Ursa.UI
 {
+    [RequireComponent(typeof(CanvasRenderer))]
     internal sealed class TapRingGraphic : MaskableGraphic
     {
         private static readonly int RingThicknessId = Shader.PropertyToID("_RingThickness");

@@ -1,9 +1,8 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
-using UnityEngine.InputSystem.Utilities;
+using UnityEngine.InputSystem.LowLevel;
 using Ursa.Inputs;
 
 namespace Ursa.InputSystemIntegration
@@ -12,9 +11,10 @@ namespace Ursa.InputSystemIntegration
     {
         internal static readonly UrsaInputSystemProvider Instance = new UrsaInputSystemProvider();
 
-        private readonly List<PendingPointerDown> _pendingPointerDowns = new List<PendingPointerDown>(8);
+        private readonly HashSet<int> _pressedPointerIds = new HashSet<int>();
+        private readonly List<UrsaPointerDownEvent> _pendingPointerDowns = new List<UrsaPointerDownEvent>(8);
+        private bool _escapePressed;
         private bool _backPressedPending;
-        private IDisposable _buttonPressSubscription;
 
         private UrsaInputSystemProvider()
         {
@@ -22,19 +22,7 @@ namespace Ursa.InputSystemIntegration
 
         public void Poll(List<UrsaPointerDownEvent> pointerDowns, out bool backPressed)
         {
-            // onAnyButtonPress runs before the event is applied to device state.
-            // Resolve the position here so a combined move-and-press event uses its new coordinates.
-            for (var index = 0; index < _pendingPointerDowns.Count; index++)
-            {
-                var pending = _pendingPointerDowns[index];
-                if (!pending.Position.device.added)
-                    continue;
-
-                pointerDowns.Add(new UrsaPointerDownEvent(
-                    pending.PointerId,
-                    pending.Position.ReadValue(),
-                    pending.DeviceKind));
-            }
+            pointerDowns.AddRange(_pendingPointerDowns);
             _pendingPointerDowns.Clear();
             CollectTouches(pointerDowns);
             backPressed = _backPressedPending;
@@ -43,10 +31,38 @@ namespace Ursa.InputSystemIntegration
 
         internal void Enable()
         {
-            _buttonPressSubscription?.Dispose();
+            InputSystem.onEvent -= OnInputEvent;
+            _pressedPointerIds.Clear();
             _pendingPointerDowns.Clear();
+            _escapePressed = false;
             _backPressedPending = false;
-            _buttonPressSubscription = InputSystem.onAnyButtonPress.Call(OnButtonPressed);
+            InputSystem.onEvent += OnInputEvent;
+        }
+
+        private void OnInputEvent(InputEventPtr eventPtr, InputDevice device)
+        {
+            if (!eventPtr.IsA<StateEvent>() && !eventPtr.IsA<DeltaStateEvent>())
+                return;
+
+            if (device is Keyboard keyboard)
+            {
+                CollectBack(eventPtr, keyboard.escapeKey);
+                return;
+            }
+
+            // Touchscreen rewrites low-level TouchState events internally. Read the finalized
+            // per-finger controls from Poll instead of interpreting the preprocessed event here.
+            if (device is Touchscreen)
+                return;
+
+            if (device is Pen pen)
+            {
+                CollectPointer(eventPtr, pen.deviceId, pen.tip, pen.position, UrsaPointerDeviceKind.Pen);
+                return;
+            }
+
+            if (device is Mouse mouse)
+                CollectPointer(eventPtr, mouse.deviceId, mouse.leftButton, mouse.position, UrsaPointerDeviceKind.Mouse);
         }
 
         private static void CollectTouches(List<UrsaPointerDownEvent> pointerDowns)
@@ -69,45 +85,40 @@ namespace Ursa.InputSystemIntegration
             }
         }
 
-        private void OnButtonPressed(InputControl control)
+        private void CollectPointer(
+            InputEventPtr eventPtr,
+            int pointerId,
+            ButtonControl press,
+            Vector2Control position,
+            UrsaPointerDeviceKind deviceKind)
         {
-            if (control.device is Keyboard keyboard && control == keyboard.escapeKey)
+            if (!press.ReadValueFromEvent(eventPtr, out var pressValue))
+                return;
+
+            var isPressed = press.IsValueConsideredPressed(pressValue);
+            if (!isPressed)
             {
-                _backPressedPending = true;
+                _pressedPointerIds.Remove(pointerId);
                 return;
             }
 
-            if (control.device is Mouse mouse && control == mouse.leftButton)
-            {
-                _pendingPointerDowns.Add(new PendingPointerDown(
-                    mouse.deviceId,
-                    mouse.position,
-                    UrsaPointerDeviceKind.Mouse));
+            if (!_pressedPointerIds.Add(pointerId))
                 return;
-            }
 
-            if (control.device is Pen pen && control == pen.tip)
-                _pendingPointerDowns.Add(new PendingPointerDown(
-                    pen.deviceId,
-                    pen.position,
-                    UrsaPointerDeviceKind.Pen));
+            if (!position.ReadValueFromEvent(eventPtr, out var screenPosition))
+                screenPosition = position.ReadValue();
+            _pendingPointerDowns.Add(new UrsaPointerDownEvent(pointerId, screenPosition, deviceKind));
         }
 
-        private readonly struct PendingPointerDown
+        private void CollectBack(InputEventPtr eventPtr, ButtonControl escapeKey)
         {
-            internal PendingPointerDown(
-                int pointerId,
-                Vector2Control position,
-                UrsaPointerDeviceKind deviceKind)
-            {
-                PointerId = pointerId;
-                Position = position;
-                DeviceKind = deviceKind;
-            }
+            if (!escapeKey.ReadValueFromEvent(eventPtr, out var value))
+                return;
 
-            internal int PointerId { get; }
-            internal Vector2Control Position { get; }
-            internal UrsaPointerDeviceKind DeviceKind { get; }
+            var isPressed = escapeKey.IsValueConsideredPressed(value);
+            if (isPressed && !_escapePressed)
+                _backPressedPending = true;
+            _escapePressed = isPressed;
         }
     }
 
