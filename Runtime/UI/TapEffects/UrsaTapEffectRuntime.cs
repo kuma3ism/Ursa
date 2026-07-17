@@ -140,7 +140,7 @@ namespace Ursa.UI
             _hasWarnedRippleFeatureMissing = true;
             Debug.LogWarning(
                 "[Ursa] Tap ripple distortion is enabled, but UrsaTapRippleRendererFeature is not active. " +
-                "The standard ring effect will be used as a fallback.");
+                "Background distortion will be skipped.");
         }
 
         private void PlayInternal(Vector2 screenPosition, TapEffectProfile requestedProfile)
@@ -149,15 +149,18 @@ namespace Ursa.UI
                 return;
 
             var profile = requestedProfile ?? _profileOverride ?? UrsaCore.Settings.DefaultTapEffectProfile ?? GetBuiltInProfile();
-            EnsureCanvas();
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    _canvasRect,
-                    screenPosition,
-                    null,
-                    out var localPosition))
-                return;
-
-            _pool.Play(localPosition, profile);
+            if (profile.RingEnabled)
+            {
+                EnsureCanvas();
+                if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                        _canvasRect,
+                        screenPosition,
+                        null,
+                        out var localPosition))
+                {
+                    _pool.Play(localPosition, profile);
+                }
+            }
             UrsaTapRippleState.Play(screenPosition, profile);
         }
 

@@ -7,6 +7,7 @@ namespace Ursa.UI
     {
         [SerializeField] private TapEffectBase _prefab;
         [SerializeField] private Material _material;
+        [SerializeField] private bool _ringEnabled = true;
         [SerializeField] private Color _color = new Color(0.35f, 0.9f, 1f, 0.9f);
         [SerializeField, Min(0.01f)] private float _duration = 0.45f;
         [SerializeField, Min(1f)] private float _startDiameter = 18f;
@@ -19,6 +20,7 @@ namespace Ursa.UI
 
         public TapEffectBase Prefab => _prefab;
         public Material Material => _material;
+        public bool RingEnabled => _ringEnabled;
         public Color Color => _color;
         public float Duration => Mathf.Max(0.01f, _duration);
         public float StartDiameter => Mathf.Max(1f, _startDiameter);
