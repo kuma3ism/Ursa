@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Ursa
@@ -63,6 +64,27 @@ namespace Ursa
                 Object.Destroy(_root.gameObject);
                 _root = null;
             }
+        }
+
+        internal static async Task WaitUntilOwnedRootDestroyedAsync()
+        {
+            for (var attempt = 0; attempt < 16; attempt++)
+            {
+                if (FindOwnedRoot() == null)
+                    return;
+                await Task.Yield();
+            }
+        }
+
+        private static GameObject FindOwnedRoot()
+        {
+            var transforms = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var transform in transforms)
+            {
+                if (transform != null && transform.parent == null && transform.gameObject.name == RootName)
+                    return transform.gameObject;
+            }
+            return null;
         }
     }
 }

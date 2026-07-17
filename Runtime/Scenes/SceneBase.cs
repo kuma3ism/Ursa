@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using Ursa.Inputs;
 using Ursa.UI;
 
 namespace Ursa
@@ -9,7 +9,7 @@ namespace Ursa
     /// 戻り値を持たない、標準的なシーンのベースクラス。
     /// 一方通行の画面遷移や、結果を返す必要のないベース画面等で使用します。
     /// </summary>
-    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver, IUrsaButtonBlockScope where T : ISceneParameter
+    public abstract class SceneBase<T> : MonoBehaviour, ISceneReceiver<T>, ISceneBackHandler, ISceneManagerReceiver, IUrsaButtonBlockScope, IUrsaBackHandler where T : ISceneParameter
     {
         [SerializeField] private bool _handleBackKey = true;
 
@@ -159,13 +159,20 @@ namespace Ursa
             await Task.CompletedTask;
         }
 
-        private void LateUpdate()
+        int IUrsaBackHandler.BackPriority => 100;
+
+        bool IUrsaBackHandler.CanHandleBack()
         {
-            if (!_handleBackKey || !IsTopScene) return;
-            if (_sceneManager?.IsTransitioning == true) return;
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-                _ = OnBackKeyPressed();
+            if (!_handleBackKey || !IsTopScene)
+                return false;
+            if (_sceneManager?.IsTransitioning == true)
+                return false;
+            if (UrsaCore.IsDialogReady && UrsaCore.Dialog.IsTransitioning)
+                return false;
+            return true;
         }
+
+        Task IUrsaBackHandler.HandleBackAsync() => OnBackKeyPressed();
 
         /// <summary>
         /// Androidのバックキー（Escape）が押された際の処理。

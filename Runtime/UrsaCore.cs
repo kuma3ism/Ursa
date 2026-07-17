@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using UnityEngine;
 using Ursa.Dialogs;
+using Ursa.Inputs;
 using Ursa.Transitions;
 using Ursa.UI;
 
@@ -20,8 +21,10 @@ namespace Ursa
             _settings = null;
 
             UrsaSettings.ResetStaticState();
+            UrsaInputRuntime.ResetStaticState();
             UrsaSceneManager.ResetStaticState();
             UrsaDialogManager.ResetStaticState();
+            UrsaTapEffectRuntime.ResetStaticState();
             TransitionCanvas.ResetStaticState();
             UrsaUICamera.ResetStaticState();
             UrsaEventSystem.ResetStaticState();
@@ -118,6 +121,7 @@ namespace Ursa
 
             var scene = Scene;
             _isResetting = true;
+            UrsaTapEffectRuntime.SuspendPlayback();
             try
             {
                 ThrowIfSceneTransitioning(scene);
@@ -131,10 +135,14 @@ namespace Ursa
                 ResetManagerRuntimeState();
                 ResetOwnedRuntimeObjects();
                 await UrsaEventSystem.WaitUntilOwnedEventSystemDestroyedAsync();
+                await UrsaDontDestroyOnLoadRoot.WaitUntilOwnedRootDestroyedAsync();
+                UrsaInputRuntime.RequestEnsureExists();
+                UrsaTapEffectRuntime.RequestEnsureExists();
                 UrsaEventSystem.RequestEnsureExists();
             }
             finally
             {
+                UrsaTapEffectRuntime.ResumePlayback();
                 _isResetting = false;
             }
         }
@@ -147,6 +155,8 @@ namespace Ursa
 
         private static void ResetOwnedRuntimeObjects()
         {
+            UrsaTapEffectRuntime.ResetOwnedRuntimeObject();
+            UrsaInputRuntime.ResetOwnedRuntimeObject();
             UrsaUICamera.ResetOwnedCameras();
             UrsaEventSystem.ResetOwnedEventSystem();
             UrsaDontDestroyOnLoadRoot.DestroyOwnedRoot();

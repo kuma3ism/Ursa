@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using Ursa.Inputs;
 using Ursa.UI;
 
 namespace Ursa.Dialogs
@@ -19,7 +19,8 @@ namespace Ursa.Dialogs
         IDialogReceiver<TParam, TResult>,
         IOpenDialog<TResult>,
         IDialogLifecycleEvents,
-        IUrsaButtonBlockScope
+        IUrsaButtonBlockScope,
+        IUrsaBackHandler
         where TParam : IDialogParameter
     {
         [SerializeField] private bool _handleBackKey = true;
@@ -150,16 +151,22 @@ namespace Ursa.Dialogs
 
         // ---- バックキー ----
 
-        private void LateUpdate()
+        int IUrsaBackHandler.BackPriority => 200;
+
+        bool IUrsaBackHandler.CanHandleBack()
         {
-            if (!_handleBackKey) return;
-            if (!UrsaCore.IsDialogReady) return;
-            if (UrsaCore.Dialog?.IsTransitioning == true) return;
-            if (!UrsaCore.Dialog.IsTopDialog(this)) return;
-            if (!IsVisibleInEnabledCanvas()) return;
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-                _ = OnBackKeyPressed();
+            if (!_handleBackKey)
+                return false;
+            if (!UrsaCore.IsDialogReady)
+                return false;
+            if (UrsaCore.Dialog.IsTransitioning)
+                return false;
+            if (!UrsaCore.Dialog.IsTopDialog(this))
+                return false;
+            return IsVisibleInEnabledCanvas();
         }
+
+        Task IUrsaBackHandler.HandleBackAsync() => OnBackKeyPressed();
 
         private bool IsVisibleInEnabledCanvas()
         {

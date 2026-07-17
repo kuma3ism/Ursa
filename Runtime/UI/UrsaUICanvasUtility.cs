@@ -59,7 +59,17 @@ namespace Ursa.UI
 
         public static void ConfigureTapEffectCanvas(Canvas canvas)
         {
-            Configure(canvas, UrsaUIRenderOrder.TapEffect);
+            if (canvas == null)
+                return;
+
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.worldCamera = null;
+            canvas.sortingOrder = UrsaUIRenderOrder.TapEffect;
+            canvas.overrideSorting = true;
+
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0)
+                SetLayerRecursively(canvas.gameObject, uiLayer);
         }
 
         public static void ConfigureManagedObject(GameObject go)
@@ -113,7 +123,6 @@ namespace Ursa.UI
                     }
                     else if (canvas.gameObject.name == "TapEffectCanvas" || canvas.gameObject.name == "[Ursa] TapEffectCanvas")
                     {
-                        WarnIfOverlayCanvas(canvas, "TapEffectCanvas");
                         ConfigureTapEffectCanvas(canvas);
                         canvas.enabled = visible;
                     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using Ursa.Transitions;
+using Ursa.UI;
 
 namespace Ursa
 {
@@ -246,5 +247,14 @@ namespace Ursa
                 ? null
                 : DefaultSceneTransitionName;
         }
+
+        [Header("タップエフェクト（Tap Effect）")]
+        [Tooltip("画面上のPointer Downに対するタップエフェクトを有効にします。")]
+        [SerializeField]
+        public bool TapEffectEnabled = true;
+
+        [Tooltip("既定のタップエフェクト設定。未指定の場合はUrsa標準のリング波紋を使用します。")]
+        [SerializeField]
+        public TapEffectProfile DefaultTapEffectProfile;
     }
 }

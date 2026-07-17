@@ -119,9 +119,9 @@ namespace Ursa.Editor
             var go = new GameObject(PrefabName);
 
             var canvas = go.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = UrsaUIRenderOrder.Transition;
-            canvas.planeDistance = 1f;
+            canvas.overrideSorting = true;
             go.AddComponent<UnityEngine.UI.CanvasScaler>();
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             go.GetComponent<RectTransform>().localScale = Vector3.one;
