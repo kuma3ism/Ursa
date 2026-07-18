@@ -22,6 +22,8 @@ namespace Ursa.Editor
     internal static class UrsaEditorTemplates
     {
         private const string UserTemplateRoot = "Assets/UrsaTemplates";
+        private const string AssetsPackageRoot = "Assets/Ursa";
+        private const string UpmPackageRoot = "Packages/com.heita.ursa";
 
         /// <summary>
         /// テンプレートファイルを読み込む。
@@ -40,7 +42,7 @@ namespace Ursa.Editor
             foreach (var guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.Contains($"/Ursa/Editor/Templates/{category}/") && path.EndsWith(fileName))
+                if (IsDefaultTemplatePath(path, category, fileName))
                 {
                     var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
                     if (asset != null) return asset.text;
@@ -51,6 +53,15 @@ namespace Ursa.Editor
                 $"[Ursa] テンプレートが見つかりません: {category}/{fileName}\n" +
                 $"  デフォルト: Ursa/Editor/Templates/{category}/{fileName}\n" +
                 $"  ユーザー:   {UserTemplateRoot}/{category}/{fileName}");
+        }
+
+        internal static bool IsDefaultTemplatePath(string assetPath, string category, string fileName)
+        {
+            if (string.IsNullOrEmpty(assetPath)) return false;
+
+            string relativePath = $"Editor/Templates/{category}/{fileName}";
+            return assetPath == $"{AssetsPackageRoot}/{relativePath}"
+                || assetPath == $"{UpmPackageRoot}/{relativePath}";
         }
 
         /// <summary>

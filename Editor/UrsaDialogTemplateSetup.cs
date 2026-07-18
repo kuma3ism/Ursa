@@ -45,7 +45,10 @@ namespace Ursa.Editor
             foreach (var guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.Contains("/Ursa/Editor/Templates/Dialog/"))
+                if (UrsaEditorTemplates.IsDefaultTemplatePath(
+                    path,
+                    "Dialog",
+                    "TemplateDialog.prefab"))
                     return AssetDatabase.LoadAssetAtPath<GameObject>(path);
             }
 
