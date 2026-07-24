@@ -254,6 +254,9 @@ await UrsaCore.Scene.ResetAsync<TopScene>(new TopSceneParameter());
 
 `UrsaCore.Scene.ResetAsync()` はシーン履歴だけを破棄し、指定したシーンを新しいルートとして読み込みます。
 
+> **注意: エディタでの未保存変更は失われます**
+> `ResetAsync()` は対象シーンを（`ISceneLoader` 経由で）ディスクから新規にロードし直します。既に開いているシーンをエディタ上で編集した直後に Play Mode へ入り、その流れで `ResetAsync()`（`UrsaAutoBootstrap` 的な仕組みでの自動初期化フォールバックを含む）が実行されると、**保存前の変更は破棄され、最後に保存された内容が読み込まれます**。単体シーンを直接開いて検証する場合は、必ず保存してから Play Mode に入ってください。
+
 ### Ursa全体のReset（タイトルへ戻る・ゲームをやり直す）
 
 ```csharp
@@ -388,6 +391,22 @@ protected override async Task OnInitializeAsync(MyParameter parameter)
     await Task.CompletedTask;
 }
 ```
+
+---
+
+## Canvas と UI カメラの自動管理
+
+Ursa は、シーン内にある名前が正確に `"UiCanvas"` の Canvas（または `UrsaUICanvas` マーカーコンポーネントが付いた Canvas）を自動検出し、`UrsaCore.Scene` 経由のシーン遷移時（`ResetAsync` / `PushAsync` / `PopAsync` / `ReplaceAsync` など）に次の設定を行います。
+
+- `renderMode` を `ScreenSpaceCamera` にし、`worldCamera` を Ursa が生成・管理する専用の `[Ursa] Scene UICamera`（直交カメラ、`cullingMask` は "UI" レイヤーのみ）に差し替える
+- そのカメラを、現在の Base カメラ（`UniversalAdditionalCameraData.renderType == Base` のカメラ。通常はシーンのメインカメラ）へ URP のカメラスタックで Overlay として自動アタッチする
+- Canvas 配下のオブジェクトを再帰的に "UI" レイヤーへ変更する
+
+> **注意: 命名規約に依存します**
+> この自動検出は GameObject 名の完全一致（`"UiCanvas"`）、または `UrsaUICanvas` コンポーネントの有無で行われます。名前が違い、かつマーカーコンポーネントも付いていない Canvas は対象外です（`ScreenSpaceOverlay` の Canvas を検出した場合は一度だけ warning を出します）。
+
+> **注意: Base / Overlay の合成順序**
+> URP のカメラスタックは「Base → Overlay」の順に描画され、**Overlay は常に Base の描画結果の上から無条件に重ね描き**します（Overlay 側の `clearFlags` は色バッファをクリアするかどうかだけを制御するもので、描画順の前後関係は変えられません）。そのため "UI" レイヤー（Overlay 側）に不透明なオブジェクトを置くと、Base カメラ側の描画内容（例: UiCanvas の外に置いた 3D オブジェクト）を、sortingOrder をどう調整しても常に覆い隠します。3D 空間側のコンテンツを見せたい場合は、UI レイヤーではなく Base カメラが描画する側（3D 空間、デフォルトレイヤーなど）に置いてください。
 
 ---
 
