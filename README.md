@@ -853,6 +853,8 @@ UrsaTapEffect.Play(screenPosition, specialProfile);
 
 同じメニューは何度実行してもFeatureを重複登録しません。Renderer DataやQuality設定を増やした時にも再実行できます。自動作成されたProfileは通常の`TapEffectProfile`なので、色、時間、大きさ、ゆがみ強度をInspectorから変更できます。リングだけを使う場合、このURP設定は不要です。
 
+自動作成されたProfileの既定値は `RingEnabled = false` / `DistortionStrength = 0.05`（最大値）です。つまりメニュー実行直後は**リングなし・水滴ゆがみのみ**の構成になります。前述の「Profile未指定時は内蔵リングを使用」とは別物なので注意してください。リングも併用したい場合は、作成されたProfileの`RingEnabled`をInspectorからONにしてください。
+
 背景ゆがみはBase Camera単体ではなく、Scene UI / Dialog用Overlay Cameraを含むcamera stackの最終出力へ適用します。最後にScreen Space - Overlayのリングを重ねるため、リング自体はゆがみません。
 
 最大8個の波紋を1回の全画面パスへまとめ、有効な波紋がないフレームではパスを実行しません。Feature未追加、非URP、Shader未検出の場合は背景ゆがみを省略し、`RingEnabled = true`ならリングだけを表示します。Featureが実行されない場合はwarningを一度だけ出します。`DistortionStrength = 0`では背景ゆがみを完全に無効化できます。
