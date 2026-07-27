@@ -73,9 +73,9 @@ namespace Ursa.Editor
             outClip.SetCurve("", typeof(CanvasGroup), "m_Alpha",
                 AnimationCurve.EaseInOut(0f, 0f, 2.0f, 1f));
             outClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.x",
-                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 15f));
+                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 30f));
             outClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.y",
-                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 15f));
+                AnimationCurve.EaseInOut(0f, 0f, 2.0f, 30f));
             outClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.z",
                 new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(2.0f, 1f)));
             AssetDatabase.CreateAsset(outClip, $"{AnimFolder}/{PrefabName}_Out.anim");
@@ -85,9 +85,9 @@ namespace Ursa.Editor
             inClip.SetCurve("", typeof(CanvasGroup), "m_Alpha",
                 AnimationCurve.EaseInOut(0f, 1f, 2.0f, 0f));
             inClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.x",
-                AnimationCurve.EaseInOut(0f, 15f, 2.0f, 0f));
+                AnimationCurve.EaseInOut(0f, 30f, 2.0f, 0f));
             inClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.y",
-                AnimationCurve.EaseInOut(0f, 15f, 2.0f, 0f));
+                AnimationCurve.EaseInOut(0f, 30f, 2.0f, 0f));
             inClip.SetCurve("Spade", typeof(Transform), "m_LocalScale.z",
                 new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(2.0f, 1f)));
             AssetDatabase.CreateAsset(inClip, $"{AnimFolder}/{PrefabName}_In.anim");
