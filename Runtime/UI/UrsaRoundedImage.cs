@@ -81,6 +81,7 @@ namespace Ursa.UI
             }
         }
 
+#if UNITY_EDITOR
         protected override void OnValidate()
         {
             base.OnValidate();
@@ -89,6 +90,7 @@ namespace Ursa.UI
             _cornerSegments = Mathf.Clamp(_cornerSegments, 1, 16);
             SetVerticesDirty();
         }
+#endif
 
         private static void AddCorner(List<Vector2> points, Vector2 center, float radius, float startAngle, float endAngle, float exponent, int steps)
         {
