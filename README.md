@@ -1,8 +1,13 @@
 # Ursa
 
-Unityの俺俺フレームワーク（まだいろいろ作成中）
+Ursa is an open-source Unity framework for reducing repeated implementation work across game projects.
+It provides reusable scene navigation, dialog management, input and button control, transitions,
+DI-friendly architecture, and URP tap effects. Ursa is distributed through the Unity Package Manager
+and is designed to remain modular for projects with or without a dependency-injection container.
 
-いろんな現場で毎回同じような実装するのでフレームワークとして起こす
+Ursaは、Unityゲーム開発で繰り返し必要になる実装を再利用可能な形にまとめたオープンソースフレームワークです。
+シーン管理、ダイアログ管理、入力・ボタン制御、画面遷移演出、DIに対応した設計、URP向けタップエフェクトを提供します。
+Unity Package Managerから導入でき、DIコンテナを使わないプロジェクトでも利用できます。
 
 ## 機能一覧
 
